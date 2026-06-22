@@ -661,28 +661,57 @@ with tab_sped:
             st.error(f"❌ Nenhum arquivo .txt encontrado em `{_pasta_monitor}` — verifique o upload.")
         else:
             st.write(f"✔ {len(_txts_prontos)} arquivo(s) prontos: " + ", ".join(t.name for t in _txts_prontos))
-            _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
-            with st.spinner("PVA abrindo... não interaja com o computador."):
+            # Verifica arquivos ja processados antes de rodar
+            import json as _json2
+            _log_atual = Path(_cfg["log_validacao"])
+            _ja_proc = set()
+            if _log_atual.exists():
                 try:
-                    _result = subprocess.run(
-                        [sys.executable, str(_script)],
-                        capture_output=True, text=True, encoding="utf-8",
-                        cwd=str(_script.parent),
-                        timeout=600,
-                    )
-                    _output = (_result.stdout or "") + (_result.stderr or "")
-                    if _result.returncode == 0 and _output.strip():
-                        st.success("✅ Fase 1 concluída!")
-                    elif not _output.strip():
-                        st.warning("⚠️ Nenhuma saída do script — verifique se o PVA está instalado.")
-                    else:
-                        st.warning("⚠️ Fase 1 com erros.")
-                    if _output.strip():
-                        st.code(_output, language="text")
-                except subprocess.TimeoutExpired:
-                    st.error("❌ Timeout (10 min). PVA não respondeu.")
-                except Exception as _exc:
-                    st.error(f"❌ Erro: {_exc}")
+                    _ja_proc = {r["arquivo"] for r in _json2.loads(_log_atual.read_text(encoding="utf-8"))}
+                except Exception:
+                    pass
+            _novos = [t for t in _txts_prontos if t.name not in _ja_proc]
+            _skip  = [t for t in _txts_prontos if t.name in _ja_proc]
+            if _skip:
+                st.info(f"ℹ️ {len(_skip)} arquivo(s) já processado(s) anteriormente (serão ignorados): " +
+                        ", ".join(t.name for t in _skip))
+            if not _novos:
+                st.warning("⚠️ Todos os arquivos já foram processados. Limpe o histórico abaixo para reprocessar.")
+            else:
+                _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
+                import os as _os
+                _env = _os.environ.copy()
+                _env["PYTHONUNBUFFERED"] = "1"
+                with st.spinner(f"PVA abrindo para processar {len(_novos)} arquivo(s)... não interaja com o computador."):
+                    try:
+                        _result = subprocess.run(
+                            [sys.executable, str(_script)],
+                            capture_output=True, text=True, encoding="utf-8",
+                            cwd=str(_script.parent),
+                            timeout=600,
+                            env=_env,
+                        )
+                        _output = (_result.stdout or "") + (_result.stderr or "")
+                        if _result.returncode == 0:
+                            st.success("✅ Fase 1 concluída!")
+                        else:
+                            st.warning("⚠️ Fase 1 com erros.")
+                        st.code(_output or "(sem saída)", language="text")
+                    except subprocess.TimeoutExpired:
+                        st.error("❌ Timeout (10 min). PVA não respondeu.")
+                    except Exception as _exc:
+                        st.error(f"❌ Erro: {_exc}")
+
+    # ── limpar histórico ──────────────────────────────────────────────────────
+    st.markdown("---")
+    with st.expander("🗑️ Limpar histórico de processamento"):
+        st.caption("Use para reprocessar arquivos que já estão no histórico.")
+        if st.button("Limpar resultado_validacao.json", key="btn_limpar"):
+            if _log_json_path.exists():
+                _log_json_path.unlink()
+                st.success("Histórico limpo. Recarregue a página.")
+            else:
+                st.info("Nenhum histórico encontrado.")
 
     # ── resultado_validacao.json ───────────────────────────────────────────────
     st.markdown("---")
