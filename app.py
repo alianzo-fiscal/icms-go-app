@@ -595,17 +595,19 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
 with tab_sped:
     st.subheader("📂 SPED / PVA — Validação e Transmissão em Lote")
 
-    # ── lê config para mostrar caminhos ──────────────────────────────────────
-    import json as _json
-
-    _cfg_path = Path(__file__).parent / "pva_monitor" / "config.json"
+    # ── lê config via _carregar_config() do fase1_lote (tem defaults corretos) ─
+    import sys as _sys
+    _pva_dir = str(Path(__file__).parent / "pva_monitor")
+    if _pva_dir not in _sys.path:
+        _sys.path.insert(0, _pva_dir)
     try:
-        _cfg = _json.loads(_cfg_path.read_text(encoding="utf-8"))
-        _pasta_monitor  = Path(_cfg["pasta_monitorada"])
-        _pasta_valid    = Path(_cfg["pasta_validados"])
-        _log_json_path  = Path(_cfg["log_validacao"])
+        from fase1_lote import _carregar_config as _cc
+        _cfg           = _cc()
+        _pasta_monitor = Path(_cfg["pasta_monitorada"])
+        _pasta_valid   = Path(_cfg["pasta_validados"])
+        _log_json_path = Path(_cfg["log_validacao"])
     except Exception as _e:
-        st.error(f"Erro ao ler config.json: {_e}")
+        st.error(f"Erro ao carregar configuração do PVA: {_e}")
         st.stop()
 
     st.caption(f"📁 Pasta monitorada: `{_pasta_monitor}`")
@@ -684,4 +686,4 @@ with tab_sped:
         except Exception as _exc:
             st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
     else:
-        st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
+        st.info("Nenhum resultado ainda. Execute a Fa
