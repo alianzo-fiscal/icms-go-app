@@ -253,12 +253,17 @@ class PVAAutomacao:
         return True
 
     def fechar_pva(self):
-        """Encerra o processo do PVA via taskkill (limpa estado para proxima execucao)."""
+        """Encerra o processo do PVA e aguarda a janela desaparecer (max 15s)."""
         import subprocess as _sp
         exe_name = self.pva_exe.name  # ex: SpedEFD.exe
         _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
-        logging.info(f"PVA encerrado ({exe_name})")
-        time.sleep(2)
+        logging.info(f"PVA encerrado ({exe_name}) — aguardando janela desaparecer")
+        for _ in range(30):           # max 15s (30 x 0.5s)
+            if not self._hwnd_pva():
+                break
+            time.sleep(0.5)
+        time.sleep(1.5)               # margem extra apos janela sumir
+        logging.info("PVA fechado com sucesso")
 
     # ── fluxos completos ─────────────────────────────────────────────────────
 
