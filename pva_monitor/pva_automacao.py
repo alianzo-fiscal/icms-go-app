@@ -52,10 +52,12 @@ def _encontrar_janela(titulo_parcial: str):
 
 
 def _fechar_popups():
-    """Fecha qualquer popup Java pendente antes de prosseguir."""
+    """Fecha qualquer popup Java pendente antes de prosseguir.
+    Usa EnumChildWindows para encontrar o botao OK pelo texto e clicar no centro exato.
+    """
     fechou = False
     _TEXTOS_BTN_OK  = ("ok", "sim", "yes", "fechar", "close", "continuar")
-    _TEXTOS_BTN_NAO = ("nao enviar", "não enviar", "not send")
+    _TEXTOS_BTN_NAO = ("nao enviar", "nao enviar", "not send")
 
     def cb(hwnd, _):
         nonlocal fechou
@@ -69,8 +71,8 @@ def _fechar_popups():
                 h = bottom - top
 
                 # Busca botao filho pelo texto para clicar no centro exato
-                btn_ok_pos     = [None]
-                btn_nao_pos    = [None]
+                btn_ok_pos  = [None]
+                btn_nao_pos = [None]
 
                 def cb_filho(h2, _):
                     txt = win32gui.GetWindowText(h2).strip()
@@ -190,7 +192,7 @@ class PVAAutomacao:
         pyautogui.press("enter")   # seleciona no JTable
         time.sleep(0.4)
         pyautogui.press("enter")   # confirma botao OK
-        time.sleep(6)              # aguarda PVA carregar o arquivo (pode ser lento para TXTs grandes)
+        time.sleep(6)              # aguarda PVA carregar o arquivo (TXTs grandes ~4MB)
         return True
 
     def abrir_escrituracao_por_posicao(self, index: int = 0) -> bool:
@@ -215,6 +217,7 @@ class PVAAutomacao:
         """Ctrl+V -> aguarda validacao -> fecha popup resultado."""
         hwnd = self._focar_pva()
         if not hwnd:
+            logging.error("validar: PVA nao encontrado")
             return False
         pyautogui.hotkey("ctrl", "v")
         timeout = self.cfg.get("aguardar_validacao_segundos", 20)
@@ -229,9 +232,4 @@ class PVAAutomacao:
             return False
         pyautogui.hotkey("ctrl", "g")
         time.sleep(self.cfg.get("aguardar_geracao_segundos", 30))
-        _fechar_popups()
-        return True
-
-    def assinar(self) -> bool:
-        """Ctrl+S -> assina com certificado digital."""
-        hwn
+        _fechar_
