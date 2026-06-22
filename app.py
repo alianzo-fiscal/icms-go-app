@@ -592,199 +592,96 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
 # ────────────────────────────────────────────────────────────────────────────
 # TAB 4 — SPED / PVA
 # ────────────────────────────
-# Configurações PVA
-_HOME         = Path.home()
-_APP_DIR      = Path(__file__).parent
-_PVA_BASE_NEW = _APP_DIR / "pva_monitor"
-_PVA_BASE_OLD = _HOME / "Claude" / "Projects" / "Transformar Apuracao em Arquivo SPED ICMS" / "pva_monitor"
-_PVA_BASE     = _PVA_BASE_NEW if _PVA_BASE_NEW.exists() else _PVA_BASE_OLD
-_MONITOR_BASE = _HOME / "Claude" / "Projects" / "TXT_SPED_MONITOR"
-
-_PVA_DEFAULTS = {
-    "pasta_monitorada": str(_MONITOR_BASE),
-    "log_validacao":    str(_MONITOR_BASE / "resultado_validacao.json"),
-    "fase1_bat":        str(_PVA_BASE / "fase1_lote.bat"),
-    "fase2_bat":        str(_PVA_BASE / "fase2_assinar_transmitir.bat"),
-}
-
-
-def _pva_cfg(chave: str) -> str:
-    try:
-        return st.secrets["pva"][chave]
-    except Exception:
-        return _PVA_DEFAULTS.get(chave, "")
-
-
-def _ler_resultado_validacao() -> list:
-    caminho = Path(_pva_cfg("log_validacao"))
-    if not caminho.exists():
-        return []
-    try:
-        return json.loads(caminho.read_text(encoding="utf-8"))
-    except Exception:
-        return []
-
-
 with tab_sped:
-    st.header("SPED Fiscal — Validação em Lote via PVA")
+    st.subheader("📂 SPED / PVA — Validação e Transmissão em Lote")
 
-    IS_LOCAL = sys.platform == "win32"
+    # ── lê config para mostrar caminhos ──────────────────────────────────────
+    import json as _json
 
-    if not IS_LOCAL:
-        st.info(
-            "ℹ️ **Esta aba funciona apenas em execução local.**\n\n"
-            "O PVA Sped Fiscal é um software Windows. Para usar esta funcionalidade, "
-            "execute o app localmente no computador onde o PVA está instalado.\n\n"
-            "As abas de Entradas, Saídas e Apuração continuam disponíveis pela URL da nuvem."
-        )
+    _cfg_path = Path(__file__).parent / "pva_monitor" / "config.json"
+    try:
+        _cfg = _json.loads(_cfg_path.read_text(encoding="utf-8"))
+        _pasta_monitor  = Path(_cfg["pasta_monitorada"])
+        _pasta_valid    = Path(_cfg["pasta_validados"])
+        _log_json_path  = Path(_cfg["log_validacao"])
+    except Exception as _e:
+        st.error(f"Erro ao ler config.json: {_e}")
+        st.stop()
+
+    st.caption(f"📁 Pasta monitorada: `{_pasta_monitor}`")
+    st.caption(f"✅ Pasta validados:   `{_pasta_valid}`")
+
+    st.markdown("---")
+
+    # ── upload de TXT ─────────────────────────────────────────────────────────
+    st.markdown("### 1. Upload dos arquivos TXT do SPED EFD")
+    uploaded_txts = st.file_uploader(
+        "Selecione um ou mais arquivos TXT gerados pelo ERP",
+        type=["txt"],
+        accept_multiple_files=True,
+        key="uploader_sped",
+    )
+
+    if uploaded_txts:
+        st.info(f"📎 {len(uploaded_txts)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_txts))
+
+    if uploaded_txts and st.button("📥 Copiar para pasta monitorada", key="btn_copiar_sped"):
+        _pasta_monitor.mkdir(parents=True, exist_ok=True)
+        copiados = []
+        for _f in uploaded_txts:
+            _dest = _pasta_monitor / _f.name
+            _dest.write_bytes(_f.getvalue())
+            copiados.append(_f.name)
+        st.success("Arquivo(s) copiado(s) para a pasta monitorada:\n" + "\n".join(f"- {n}" for n in copiados))
+
+    st.markdown("---")
+
+    # ── Fase 1: importar + validar ────────────────────────────────────────────
+    st.markdown("### 2. Fase 1 — Importar e Validar no PVA")
+    st.caption("O PVA Sped Fiscal será aberto automaticamente. Não interaja com o computador durante o processo.")
+
+    if st.button("▶️ Executar Fase 1 (Importar + Validar)", type="primary", key="btn_fase1"):
+        _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
+        with st.spinner("Processando... aguarde (pode levar vários minutos por arquivo)"):
+            try:
+                _result = subprocess.run(
+                    [sys.executable, str(_script)],
+                    capture_output=True, text=True, encoding="utf-8",
+                    cwd=str(_script.parent),
+                    timeout=600,
+                )
+                _output = (_result.stdout or "") + (_result.stderr or "")
+                if _result.returncode == 0:
+                    st.success("✅ Fase 1 concluída!")
+                else:
+                    st.warning("⚠️ Fase 1 terminou com erros. Veja o log abaixo.")
+                st.code(_output, language="text")
+            except subprocess.TimeoutExpired:
+                st.error("❌ Timeout (10 min). Verifique se o PVA está respondendo.")
+            except Exception as _exc:
+                st.error(f"❌ Erro: {_exc}")
+
+    # ── resultado_validacao.json ───────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 3. Resultado da Validação")
+
+    if _log_json_path.exists():
+        try:
+            _resultados = _json.loads(_log_json_path.read_text(encoding="utf-8"))
+            import pandas as _pd
+            _df = _pd.DataFrame(_resultados)
+            if not _df.empty:
+                _ok   = _df[_df.get("status", _pd.Series()) == "OK"].shape[0] if "status" in _df else 0
+                _err  = _df[_df.get("status", _pd.Series()) == "ERRO"].shape[0] if "status" in _df else 0
+                _f2ok = _df[_df.get("fase2_ok", _pd.Series(dtype=bool)) == True].shape[0] if "fase2_ok" in _df else 0
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Validados OK", _ok)
+                col2.metric("Com Erro",     _err)
+                col3.metric("Transmitidos", _f2ok)
+                st.dataframe(_df, use_container_width=True)
+            else:
+                st.info("Nenhum resultado registrado ainda.")
+        except Exception as _exc:
+            st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
     else:
-        pasta_monitorada = Path(_pva_cfg("pasta_monitorada"))
-        fase1_bat = Path(_pva_cfg("fase1_bat"))
-        fase2_bat = Path(_pva_cfg("fase2_bat"))
-
-        # ── Seção 1: Upload ────────────────────────────────────────────────
-        st.markdown("### 1. Upload dos arquivos TXT SPED")
-        st.markdown(
-            "Selecione os arquivos `.txt` gerados pelo ERP. "
-            "Eles serão copiados para a **pasta monitorada** automaticamente."
-        )
-
-        with st.expander("⚙️ Caminhos configurados", expanded=False):
-            st.code(
-                f"Pasta monitorada : {pasta_monitorada}\n"
-                f"Fase 1 (lote)    : {fase1_bat}\n"
-                f"Fase 2 (transmit): {fase2_bat}\n"
-                f"Log validação    : {_pva_cfg('log_validacao')}",
-                language="text",
-            )
-
-        uploaded_txt = st.file_uploader(
-            "Arquivos TXT SPED",
-            type=["txt"],
-            accept_multiple_files=True,
-            key="uploader_sped_txt",
-        )
-
-        if uploaded_txt:
-            st.info(f"📎 {len(uploaded_txt)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_txt))
-
-        if uploaded_txt and st.button("📁 Copiar para pasta monitorada", key="btn_copiar_sped"):
-            try:
-                pasta_monitorada.mkdir(parents=True, exist_ok=True)
-                copiados = []
-                for f in uploaded_txt:
-                    destino = pasta_monitorada / f.name
-                    destino.write_bytes(f.getvalue())
-                    copiados.append(f.name)
-                st.success(f"✅ {len(copiados)} arquivo(s) copiado(s) para:\n`{pasta_monitorada}`")
-                for nome in copiados:
-                    st.caption(f"  • {nome}")
-            except Exception:
-                st.error(f"❌ Erro ao copiar arquivos:\n\n```\n{traceback.format_exc()}\n```")
-
-        st.divider()
-
-        # ── Seção 2: Fase 1 ───────────────────────────────────────────────
-        st.markdown("### 2. Fase 1 — Importar e Validar no PVA")
-        st.markdown(
-            "Clique no botão abaixo para iniciar a validação em lote. "
-            "O PVA será aberto automaticamente, cada arquivo será importado e validado. "
-            "**Não interaja com o computador durante o processo.**"
-        )
-
-        col_f1a, col_f1b = st.columns([2, 1])
-        with col_f1a:
-            txt_na_pasta = list(pasta_monitorada.glob("*.txt")) if pasta_monitorada.exists() else []
-            if txt_na_pasta:
-                st.success(f"📂 {len(txt_na_pasta)} arquivo(s) TXT aguardando na pasta monitorada.")
-            else:
-                st.warning("📂 Nenhum arquivo TXT na pasta monitorada. Faça upload acima primeiro.")
-
-            if not fase1_bat.exists():
-                st.warning(f"⚠️ `fase1_lote.bat` não encontrado em:\n`{fase1_bat}`")
-
-        with col_f1b:
-            btn_fase1 = st.button(
-                "▶️ Iniciar Fase 1 (Validação)",
-                type="primary",
-                key="btn_fase1",
-                disabled=not (txt_na_pasta and fase1_bat.exists()),
-            )
-
-        if btn_fase1:
-            try:
-                subprocess.Popen(
-                    ["cmd", "/c", str(fase1_bat)],
-                    cwd=str(fase1_bat.parent),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                st.success(
-                    "✅ Fase 1 iniciada em nova janela CMD.\n\n"
-                    "Aguarde a conclusão antes de interagir com o computador."
-                )
-            except Exception:
-                st.error(f"❌ Erro ao iniciar Fase 1:\n\n```\n{traceback.format_exc()}\n```")
-
-        st.divider()
-
-        # ── Seção 3: Resultados ───────────────────────────────────────────
-        st.markdown("### 3. Resultados da Validação")
-
-        if st.button("🔄 Atualizar resultados", key="btn_refresh_sped"):
-            st.rerun()
-
-        resultados = _ler_resultado_validacao()
-        if not resultados:
-            st.info("Nenhum resultado disponível ainda. Execute a Fase 1 primeiro.")
-        else:
-            ok_list  = [r for r in resultados if r.get("status") == "OK"]
-            err_list = [r for r in resultados if r.get("status") != "OK"]
-            col_ok, col_err = st.columns(2)
-            with col_ok:
-                st.metric("✅ Validados com sucesso", len(ok_list))
-            with col_err:
-                st.metric("❌ Com erro", len(err_list))
-
-            import pandas as pd
-            df = pd.DataFrame(resultados)
-            cols = [c for c in ["arquivo", "status", "timestamp", "fase2_ok", "fase2_timestamp"] if c in df.columns]
-            st.dataframe(df[cols], use_container_width=True)
-
-        st.divider()
-
-        # ── Seção 4: Fase 2 ───────────────────────────────────────────────
-        st.markdown("### 4. Fase 2 — Assinar e Transmitir ao SEFAZ")
-        st.markdown(
-            "Execute **após revisar** os resultados da Fase 1. "
-            "Processa apenas arquivos com status **OK** ainda não transmitidos. "
-            "**Pré-requisito:** certificado digital e-CNPJ configurado no PVA."
-        )
-
-        resultados_ok = [r for r in _ler_resultado_validacao() if r.get("status") == "OK" and not r.get("fase2_ok")]
-        col_f2a, col_f2b = st.columns([2, 1])
-        with col_f2a:
-            if resultados_ok:
-                st.success(f"📋 {len(resultados_ok)} arquivo(s) prontos para transmissão.")
-            else:
-                st.info("Nenhum arquivo pendente para transmissão.")
-
-            if not fase2_bat.exists():
-                st.warning(f"⚠️ `fase2_assinar_transmitir.bat` não encontrado em:\n`{fase2_bat}`")
-
-        with col_f2b:
-            btn_fase2 = st.button(
-                "📡 Iniciar Fase 2 (Transmissão)",
-                key="btn_fase2",
-                disabled=not (resultados_ok and fase2_bat.exists()),
-            )
-
-        if btn_fase2:
-            try:
-                subprocess.Popen(
-                    ["cmd", "/c", str(fase2_bat)],
-                    cwd=str(fase2_bat.parent),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                st.success("✅ Fase 2 iniciada em nova janela CMD.")
-            except Exception:
-                st.error(f"❌ Erro ao iniciar Fase 2:\n\n```\n{traceback.format_exc()}\n```")
+        st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
