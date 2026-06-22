@@ -270,51 +270,62 @@ class PVAAutomacao:
         time.sleep(1)
         logging.info("PVA fechado com sucesso")
 
-    # ── fluxos completos ─────────────────────────────────────────────────────
+    # ── fluxo completo ───────────────────────────────────────────────────────
 
-    def fase1_processar(self, caminho: Path) -> bool:
-        """Importa + valida um arquivo TXT. Escrituracao fica aberta no PVA para Fase 2."""
-        logging.info(f"[Fase1] Processando: {caminho.name}")
-        self.fechar_escrituracao()
+    def processar_completo(self, caminho: Path) -> bool:
+        """Fluxo completo em uma unica sessao PVA:
+        Importar -> Validar -> Gerar -> Assinar -> Transmitir
+        PVA nao e fechado entre etapas — evita perda do banco.
+        """
+        logging.info(f"[PVA] Iniciando: {caminho.name}")
+
+        # 1. Abre PVA
         if not self.abrir_pva():
             logging.error("Nao foi possivel abrir o PVA")
             return False
+
+        # 2. Fecha escrituracao anterior se houver
+        self.fechar_escrituracao()
+
+        # 3. Importa o arquivo
         if not self.importar_arquivo(caminho):
             logging.error(f"Falha ao importar: {caminho.name}")
             return False
-        if not self.abrir_escrituracao_mais_recente():
-            logging.error("Falha ao abrir escrituracao mais recente")
-            return False
-        ok = self.validar()
-        if not ok:
-            logging.error(f"Falha na validacao: {caminho.name}")
-        # NAO fecha escrituracao — fica no PVA para Fase 2
-        return ok
 
-    def fase2_processar(self, caminho: Path, index: int = 0) -> bool:
-        """Re-importa da pasta_validados, gera, assina e transmite.
-        Nao depende do banco do PVA persistir apos Fase 1 — reimporta sempre.
-        """
-        logging.info(f"[Fase2] Processando: {caminho.name}")
-        self.fechar_escrituracao()
-        if not self.abrir_pva():
-            logging.error("Nao foi possivel abrir o PVA")
-            return False
-        # Reimporta o arquivo (banco pode ter sido perdido ao fechar o PVA)
-        if not self.importar_arquivo(caminho):
-            logging.error(f"Falha ao reimportar: {caminho.name}")
-            return False
+        # 4. Abre a escrituracao recem importada
         if not self.abrir_escrituracao_mais_recente():
-            logging.error("Falha ao abrir escrituracao apos reimportacao")
+            logging.error("Falha ao abrir escrituracao")
             return False
+
+        # 5. Valida
+        logging.info("Validando...")
+        if not self.validar():
+            logging.error("Falha na validacao")
+            return False
+
+        # 6. Gera arquivo de entrega
+        logging.info("Gerando arquivo de entrega...")
         if not self.gerar_arquivo():
             logging.error("Falha ao gerar arquivo")
             return False
+
+        # 7. Assina
+        logging.info("Assinando...")
         if not self.assinar():
             logging.error("Falha na assinatura")
             return False
+
+        # 8. Transmite
+        logging.info("Transmitindo...")
         ok = self.transmitir()
         if not ok:
             logging.error(f"Falha na transmissao: {caminho.name}")
+
         self.fechar_escrituracao()
         return ok
+
+    # ── compat: mantém nomes antigos apontando para fluxo completo ───────────
+
+    def fase1_processar(self, caminho: Path) -> bool:
+        """Alias para processar_completo (fluxo unificado)."""
+        return self.processar_completo(caminho)
