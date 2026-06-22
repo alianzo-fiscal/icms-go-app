@@ -26,7 +26,7 @@ echo [3/4] Criando atalho na area de trabalho...
 set VBS_SRC=%~dp0Iniciar ICMS GO.vbs
 set SHORTCUT=%USERPROFILE%\Desktop\Plataforma ICMS GO.lnk
 
-powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%VBS_SRC%'; $s.IconLocation = 'shell32.dll,13'; $s.Description = 'Plataforma ICMS/GO'; $s.Save()"
+powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%VBS_SRC%'; $s.IconLocation = "%~dp0ICMS360.ico"; $s.Description = 'Plataforma ICMS/GO'; $s.Save()"
 echo [OK] Atalho criado na area de trabalho.
 echo.
 
