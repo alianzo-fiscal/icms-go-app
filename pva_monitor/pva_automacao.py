@@ -253,31 +253,43 @@ class PVAAutomacao:
         return True
 
     def fechar_pva(self):
-        """Encerra o processo do PVA (launcher + Java) pelo PID da janela."""
-        import ctypes as _ct
+        """Fecha o PVA graciosamente (Alt+F4) para o Java salvar o banco antes de sair.
+        Forceful kill (taskkill) apaga as escrituracoes importadas — evitar.
+        """
         import subprocess as _sp
 
-        # 1. Tenta fechar pelo PID da janela principal do PVA
+        # 1. Fecha popups de crash pendentes (Escape) antes de enviar Alt+F4
+        for _ in range(6):
+            if not _fechar_popups():
+                break
+            time.sleep(1.0)
+
+        # 2. Fecha PVA graciosamente via Alt+F4 na janela principal
         hwnd = self._hwnd_pva()
         if hwnd:
-            pid = _ct.c_ulong()
-            _ct.windll.user32.GetWindowThreadProcessId(hwnd, _ct.byref(pid))
-            _sp.run(["taskkill", "/F", "/PID", str(pid.value)], capture_output=True)
-            logging.info(f"PVA encerrado via PID {pid.value}")
+            _attach_foreground(hwnd)
+            time.sleep(0.4)
+            pyautogui.hotkey("alt", "F4")
+            time.sleep(1.5)
+            # Pode aparecer dialog "Deseja sair?" — fecha com Enter
+            _fechar_popups()
+            pyautogui.press("enter")
+            logging.info("Alt+F4 enviado ao PVA — aguardando encerramento")
 
-        # 2. Mata qualquer popup de crash que ainda esteja aberto (titulo Erro/Atencao)
-        _fechar_popups()
-
-        # 3. Fallback: mata pelo nome do executavel
-        exe_name = self.pva_exe.name
-        _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
-
-        # 4. Aguarda janela desaparecer (max 15s)
-        for _ in range(30):
+        # 3. Aguarda janela desaparecer (max 20s)
+        for _ in range(40):
             if not self._hwnd_pva():
                 break
             time.sleep(0.5)
-        time.sleep(1.5)
+
+        # 4. Fallback: taskkill apenas se ainda estiver aberto
+        if self._hwnd_pva():
+            exe_name = self.pva_exe.name
+            _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
+            logging.warning(f"PVA nao fechou graciosamente — taskkill usado ({exe_name})")
+            time.sleep(2)
+
+        time.sleep(1)
         logging.info("PVA fechado com sucesso")
 
     # ── fluxos completos ─────────────────────────────────────────────────────
