@@ -596,6 +596,7 @@ with tab_sped:
     st.subheader("📂 SPED / PVA — Validação e Transmissão em Lote")
 
     # ── lê config via _carregar_config() do fase1_lote (tem defaults corretos) ─
+    import json as _json
     import sys as _sys
     _pva_dir = str(Path(__file__).parent / "pva_monitor")
     if _pva_dir not in _sys.path:
@@ -686,4 +687,4 @@ with tab_sped:
         except Exception as _exc:
             st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
     else:
-        st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
+        st.info("Nenhum resu
