@@ -125,3 +125,7 @@ def main():
     err_count = sum(1 for r in resultados if r.get("status") != "OK")
     print(f"  Concluido: {ok_count} OK  |  {err_count} com erro")
     print(f"{'='*60}\n")
+
+
+if __name__ == "__main__":
+    main()
