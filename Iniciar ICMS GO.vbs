@@ -9,8 +9,8 @@ oShell.Run "cmd /c cd /d """ & sDir & """ && python atualizar.py", 0, True
 ' Inicia o app Streamlit em segundo plano
 oShell.Run "cmd /c cd /d """ & sDir & """ && python -m streamlit run app.py", 0, False
 
-' Aguarda o servidor iniciar e abre o navegador
-WScript.Sleep 4000
-oShell.Run "http://localhost:8501"
+' Aguarda o servidor iniciar e abre em modo app (janela desktop sem abas)
+WScript.Sleep 5000
 
-Set oShell 
+Dim appUrl
+appUrl = 
