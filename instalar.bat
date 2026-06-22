@@ -27,7 +27,7 @@ python --version
 echo [OK] Python encontrado.
 echo.
 
-echo [1/4] Instalando dependencias Python...
+echo [2/4] Instalando dependencias Python...
 python -m pip install streamlit pandas openpyxl python-docx xlrd xlsxwriter lxml --quiet
 if %errorlevel% neq 0 (
     echo ERRO: falha ao instalar dependencias.
@@ -37,12 +37,12 @@ if %errorlevel% neq 0 (
 echo [OK] Dependencias instaladas.
 echo.
 
-echo [2/4] Criando pastas SPED...
+echo [3/4] Criando pastas SPED...
 call "%~dp0setup_sped.bat" /silent
 echo [OK] Pastas criadas.
 echo.
 
-echo [3/4] Criando atalho na area de trabalho...
+echo [4/4] Criando atalho na area de trabalho...
 python "%~dp0criar_atalho.py" "%~dp0"
 if %errorlevel% neq 0 (
     echo AVISO: nao foi possivel criar o atalho automaticamente.

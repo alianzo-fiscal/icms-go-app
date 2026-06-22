@@ -1,51 +1,44 @@
 """
-Cria o atalho "Plataforma ICMS GO" na area de trabalho.
-Chamado pelo instalar.bat com o diretorio do app como argumento.
-Usa PowerShell parametrizado para evitar problemas de encoding com caminhos Unicode.
+Instalador do atalho "Plataforma ICMS GO".
+
+Estratégia:
+  - Copia o ícone para %LOCALAPPDATA%\ICMS_GO\ (caminho sem caracteres especiais)
+  - Grava um VBS launcher em %LOCALAPPDATA%\ICMS_GO\ que aponta diretamente para
+    o diretório do app (com ã no caminho) — VBScript lida com Unicode em strings
+  - Cria o atalho .lnk no Desktop apontando para o LOCALAPPDATA (sem ã)
+
+Assim o Windows encontra o ícone e o atalho sem problemas de encoding.
 """
 import sys
 import os
+import shutil
 import subprocess
 import tempfile
 
-script_dir = sys.argv[1].rstrip('\\').rstrip('/')
-vbs_path   = os.path.join(script_dir, 'Iniciar ICMS GO.vbs')
-ico_path   = os.path.join(script_dir, 'ICMS360.ico')
+# Diretório do app (ex: C:\Users\...\icms-go-app)
+app_dir = sys.argv[1].rstrip('\\/').rstrip('\\')
 
-# Script PowerShell usa parametros — nenhum caminho Unicode fica embutido no .ps1
-ps_script = """
-param($vbs, $ico)
-$ws      = New-Object -ComObject WScript.Shell
-$desktop = [Environment]::GetFolderPath('Desktop')
-$lnk     = Join-Path $desktop 'Plataforma ICMS GO.lnk'
-$s = $ws.CreateShortcut($lnk)
-$s.TargetPath    = $vbs
-$s.IconLocation  = $ico
-$s.Description   = 'Plataforma ICMS/GO'
-$s.Save()
-Write-Output "Atalho criado em: $lnk"
-"""
+# Pasta local sem caracteres especiais
+launcher_dir = os.path.join(os.environ['LOCALAPPDATA'], 'ICMS_GO')
+os.makedirs(launcher_dir, exist_ok=True)
 
-# Escreve PS1 em UTF-8 com BOM (PowerShell le corretamente)
-tmp = os.path.join(tempfile.gettempdir(), 'criar_atalho_icms.ps1')
-with open(tmp, 'w', encoding='utf-8-sig') as f:
-    f.write(ps_script)
+# 1. Copiar ícone
+ico_src = os.path.join(app_dir, 'ICMS360.ico')
+ico_dst = os.path.join(launcher_dir, 'ICMS360.ico')
+shutil.copy2(ico_src, ico_dst)
 
-result = subprocess.run(
-    ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-     '-File', tmp,
-     '-vbs', vbs_path,
-     '-ico', ico_path],
-    capture_output=True, text=True
+# 2. Escrever VBS com sDir fixo apontando para o app_dir real
+#    Encoding cp1252 = ANSI português (wscript lê corretamente)
+vbs_src = os.path.join(app_dir, 'Iniciar ICMS GO.vbs')
+vbs_dst = os.path.join(launcher_dir, 'Iniciar ICMS GO.vbs')
+
+with open(vbs_src, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Substitui o sDir dinâmico pelo caminho absoluto do app
+content = content.replace(
+    'sDir = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\\") - 1)',
+    f'sDir = "{app_dir}"'
 )
 
-try:
-    os.unlink(tmp)
-except Exception:
-    pass
-
-if result.returncode == 0:
-    print('[OK] ' + (result.stdout.strip() or 'Atalho criado com sucesso'))
-else:
-    print('[ERRO] ' + result.stderr.strip())
-    sys.exit(1)
+with open(vbs_dst, 'w', encoding='cp1252') a
