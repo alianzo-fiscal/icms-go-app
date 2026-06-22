@@ -43,7 +43,7 @@ echo [OK] Pastas criadas.
 echo.
 
 echo [4/4] Criando atalho na area de trabalho...
-python "%~dp0criar_atalho.py" "%~dp0"
+python "%~dp0criar_atalho.py"
 if %errorlevel% neq 0 (
     echo AVISO: nao foi possivel criar o atalho automaticamente.
-    echo Voce pode criar manualmente: clique direito no deskt
+    echo Voce pode criar manualmente: clique direito no desktop > Nov
