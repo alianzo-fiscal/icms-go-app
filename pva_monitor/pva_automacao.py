@@ -253,16 +253,31 @@ class PVAAutomacao:
         return True
 
     def fechar_pva(self):
-        """Encerra o processo do PVA e aguarda a janela desaparecer (max 15s)."""
+        """Encerra o processo do PVA (launcher + Java) pelo PID da janela."""
+        import ctypes as _ct
         import subprocess as _sp
-        exe_name = self.pva_exe.name  # ex: SpedEFD.exe
+
+        # 1. Tenta fechar pelo PID da janela principal do PVA
+        hwnd = self._hwnd_pva()
+        if hwnd:
+            pid = _ct.c_ulong()
+            _ct.windll.user32.GetWindowThreadProcessId(hwnd, _ct.byref(pid))
+            _sp.run(["taskkill", "/F", "/PID", str(pid.value)], capture_output=True)
+            logging.info(f"PVA encerrado via PID {pid.value}")
+
+        # 2. Mata qualquer popup de crash que ainda esteja aberto (titulo Erro/Atencao)
+        _fechar_popups()
+
+        # 3. Fallback: mata pelo nome do executavel
+        exe_name = self.pva_exe.name
         _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
-        logging.info(f"PVA encerrado ({exe_name}) — aguardando janela desaparecer")
-        for _ in range(30):           # max 15s (30 x 0.5s)
+
+        # 4. Aguarda janela desaparecer (max 15s)
+        for _ in range(30):
             if not self._hwnd_pva():
                 break
             time.sleep(0.5)
-        time.sleep(1.5)               # margem extra apos janela sumir
+        time.sleep(1.5)
         logging.info("PVA fechado com sucesso")
 
     # ── fluxos completos ─────────────────────────────────────────────────────
