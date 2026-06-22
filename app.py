@@ -647,60 +647,49 @@ with tab_sped:
     if not _pode_fase1:
         st.info("ℹ️ Faça upload de pelo menos um arquivo TXT para continuar.")
 
+    _forcar = st.checkbox("🔄 Forçar reprocessamento (ignorar histórico)", key="chk_forcar")
+
     if _pode_fase1 and st.button("▶️ Executar Fase 1 (Importar + Validar)", type="primary", key="btn_fase1"):
-        # Copia arquivos do uploader (se houver) para a pasta monitorada
+        import os as _os
+        # Copia arquivos do uploader para a pasta monitorada
         if uploaded_txts:
             for _f in uploaded_txts:
                 _dest = _pasta_monitor / _f.name
                 _dest.write_bytes(_f.getvalue())
             st.write(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
 
-        # Verifica novamente após cópia
+        # Se forçar reprocessamento, remove o json de histórico AGORA
+        if _forcar and _log_json_path.exists():
+            _log_json_path.unlink()
+            st.write("✔ Histórico limpo (reprocessamento forçado)")
+
         _txts_prontos = list(_pasta_monitor.glob("*.txt"))
         if not _txts_prontos:
-            st.error(f"❌ Nenhum arquivo .txt encontrado em `{_pasta_monitor}` — verifique o upload.")
+            st.error(f"❌ Nenhum arquivo .txt em `{_pasta_monitor}`. Faça upload primeiro.")
         else:
             st.write(f"✔ {len(_txts_prontos)} arquivo(s) prontos: " + ", ".join(t.name for t in _txts_prontos))
-            # Verifica arquivos ja processados antes de rodar
-            import json as _json2
-            _log_atual = Path(_cfg["log_validacao"])
-            _ja_proc = set()
-            if _log_atual.exists():
+            _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
+            _env = _os.environ.copy()
+            _env["PYTHONUNBUFFERED"] = "1"
+            with st.spinner("PVA abrindo... não interaja com o computador."):
                 try:
-                    _ja_proc = {r["arquivo"] for r in _json2.loads(_log_atual.read_text(encoding="utf-8"))}
-                except Exception:
-                    pass
-            _novos = [t for t in _txts_prontos if t.name not in _ja_proc]
-            _skip  = [t for t in _txts_prontos if t.name in _ja_proc]
-            if _skip:
-                st.info(f"ℹ️ {len(_skip)} arquivo(s) já processado(s) anteriormente (serão ignorados): " +
-                        ", ".join(t.name for t in _skip))
-            if not _novos:
-                st.warning("⚠️ Todos os arquivos já foram processados. Limpe o histórico abaixo para reprocessar.")
-            else:
-                _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
-                import os as _os
-                _env = _os.environ.copy()
-                _env["PYTHONUNBUFFERED"] = "1"
-                with st.spinner(f"PVA abrindo para processar {len(_novos)} arquivo(s)... não interaja com o computador."):
-                    try:
-                        _result = subprocess.run(
-                            [sys.executable, str(_script)],
-                            capture_output=True, text=True, encoding="utf-8",
-                            cwd=str(_script.parent),
-                            timeout=600,
-                            env=_env,
-                        )
-                        _output = (_result.stdout or "") + (_result.stderr or "")
-                        if _result.returncode == 0:
-                            st.success("✅ Fase 1 concluída!")
-                        else:
-                            st.warning("⚠️ Fase 1 com erros.")
-                        st.code(_output or "(sem saída)", language="text")
-                    except subprocess.TimeoutExpired:
-                        st.error("❌ Timeout (10 min). PVA não respondeu.")
-                    except Exception as _exc:
-                        st.error(f"❌ Erro: {_exc}")
+                    _result = subprocess.run(
+                        [sys.executable, str(_script)],
+                        capture_output=True, text=True, encoding="utf-8",
+                        cwd=str(_script.parent),
+                        timeout=600,
+                        env=_env,
+                    )
+                    _output = (_result.stdout or "") + (_result.stderr or "")
+                    if _result.returncode == 0:
+                        st.success("✅ Fase 1 concluída!")
+                    else:
+                        st.warning("⚠️ Fase 1 com erros.")
+                    st.code(_output or "(sem saída — verifique se o PVA está instalado)", language="text")
+                except subprocess.TimeoutExpired:
+                    st.error("❌ Timeout (10 min). PVA não respondeu.")
+                except Exception as _exc:
+                    st.error(f"❌ Erro: {_exc}")
 
     # ── limpar histórico ──────────────────────────────────────────────────────
     st.markdown("---")
