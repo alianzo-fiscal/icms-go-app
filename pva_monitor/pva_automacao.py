@@ -52,9 +52,12 @@ def _encontrar_janela(titulo_parcial: str):
 
 
 def _fechar_popups():
-    """Fecha qualquer popup Java pendente.
-    Estrategia: foca a janela e usa teclado (Escape / Enter) pois botoes Swing
-    nao sao janelas Win32 e nao sao encontrados via EnumChildWindows.
+    """Fecha qualquer popup Java pendente via Escape.
+    Escape e seguro para todos os dialogs PVA:
+    - 'Houve um erro ao ler a configuracao' (Ok unico) -> fecha
+    - 'Atencao - erro critico' (Nao Enviar / Enviar) -> escolhe Nao Enviar
+    - 'Verificacao concluida' (Ok) -> fecha
+    Nota: botoes Swing nao sao janelas Win32, EnumChildWindows nao os encontra.
     """
     fechou = False
 
@@ -67,36 +70,11 @@ def _fechar_popups():
             if t.lower() in titulo.lower():
                 _attach_foreground(hwnd)
                 time.sleep(0.4)
-
-                # Verifica se ainda esta visivel apos focar (pode ter sumido)
                 if not win32gui.IsWindowVisible(hwnd):
                     fechou = True
                     break
-
-                # Detecta se e popup de erro critico ("Nao Enviar") pelo titulo ou filho
-                is_crash = False
-                textos = []
-                def cb_filho(h2, _):
-                    txt = win32gui.GetWindowText(h2)
-                    if txt:
-                        textos.append(txt.lower())
-                try:
-                    win32gui.EnumChildWindows(hwnd, cb_filho, None)
-                except Exception:
-                    pass
-                if any("nao enviar" in t2 or "nao enviar" in t2 or "not send" in t2
-                       for t2 in textos):
-                    is_crash = True
-
-                if is_crash:
-                    # Escape = "Nao Enviar" em dialogs de crash Java
-                    pyautogui.press("escape")
-                    logging.info(f"fechou popup crash '{titulo}' via Escape")
-                else:
-                    # Enter = confirma botao padrao (OK/Sim) em dialogs comuns
-                    pyautogui.press("enter")
-                    logging.info(f"fechou popup '{titulo}' via Enter")
-
+                pyautogui.press("escape")
+                logging.info(f"fechou popup '{titulo}' via Escape")
                 fechou = True
                 time.sleep(0.6)
                 break
