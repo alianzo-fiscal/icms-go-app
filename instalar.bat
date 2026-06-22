@@ -43,7 +43,9 @@ echo [OK] Pastas criadas.
 echo.
 
 echo [3/4] Criando atalho na area de trabalho...
-set VBS_SRC=%~dp0Iniciar ICMS GO.vbs
-set SHORTCUT=%USERPROFILE%\Desktop\Plataforma ICMS GO.lnk
+set "VBS_SRC=%~dp0Iniciar ICMS GO.vbs"
+set "ICO_SRC=%~dp0ICMS360.ico"
 
-powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SH
+> "%TEMP%\criar_atalho.ps1" echo $vbs = '%VBS_SRC%'
+>> "%TEMP%\criar_atalho.ps1" echo $ico = '%ICO_SRC%'
+>> "%TEMP%\c
