@@ -6,11 +6,31 @@ echo   Instalacao - Plataforma ICMS/GO
 echo ============================================================
 echo.
 
+echo [1/4] Verificando Python...
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo ============================================================
+    echo   ERRO: Python nao encontrado!
+    echo.
+    echo   Para instalar:
+    echo   1. Acesse: https://www.python.org/downloads
+    echo   2. Clique em "Download Python" e instale
+    echo   3. IMPORTANTE: marque "Add Python to PATH" na instalacao
+    echo   4. Depois de instalar, execute este arquivo novamente
+    echo ============================================================
+    echo.
+    pause
+    exit /b 1
+)
+python --version
+echo [OK] Python encontrado.
+echo.
+
 echo [1/4] Instalando dependencias Python...
-pip install streamlit pandas openpyxl python-docx xlrd xlsxwriter lxml --quiet
+python -m pip install streamlit pandas openpyxl python-docx xlrd xlsxwriter lxml --quiet
 if %errorlevel% neq 0 (
     echo ERRO: falha ao instalar dependencias.
-    echo Certifique-se de que o Python esta instalado: python.org/downloads
     pause
     exit /b 1
 )
@@ -26,16 +46,4 @@ echo [3/4] Criando atalho na area de trabalho...
 set VBS_SRC=%~dp0Iniciar ICMS GO.vbs
 set SHORTCUT=%USERPROFILE%\Desktop\Plataforma ICMS GO.lnk
 
-powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%VBS_SRC%'; $s.IconLocation = "%~dp0ICMS360.ico"; $s.Description = 'Plataforma ICMS/GO'; $s.Save()"
-echo [OK] Atalho criado na area de trabalho.
-echo.
-
-echo [4/4] Iniciando o aplicativo pela primeira vez...
-echo.
-echo ============================================================
-echo   Instalacao concluida!
-echo   Um atalho "Plataforma ICMS GO" foi criado na sua area de trabalho.
-echo   Use-o para abrir o app sem precisar abrir o cmd.
-echo ============================================================
-echo.
-wscript "%~dp0Iniciar ICMS GO.vbs"
+powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SH
