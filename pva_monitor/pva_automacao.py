@@ -162,7 +162,7 @@ class PVAAutomacao:
         pyautogui.press("enter")   # seleciona no JTable
         time.sleep(0.4)
         pyautogui.press("enter")   # confirma botao OK
-        time.sleep(2.5)
+        time.sleep(6)              # aguarda PVA carregar o arquivo (pode ser lento para TXTs grandes)
         return True
 
     def abrir_escrituracao_por_posicao(self, index: int = 0) -> bool:
@@ -232,6 +232,4 @@ class PVAAutomacao:
         self.fechar_escrituracao()
         if not self.abrir_pva():
             logging.error("Nao foi possivel abrir o PVA")
-            return False
-        if not self.importar_arquivo(caminho):
-            return F
+            r
