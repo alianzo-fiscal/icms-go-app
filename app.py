@@ -677,7 +677,7 @@ with tab_sped:
                         [sys.executable, str(_script)],
                         capture_output=True, text=True, encoding="utf-8",
                         cwd=str(_script.parent),
-                        timeout=5400,  # 90 min para lotes grandes
+                        timeout=7200,  # 2 horas para lotes grandes
                         env=_env,
                     )
                     _output = (_result.stdout or "") + (_result.stderr or "")
