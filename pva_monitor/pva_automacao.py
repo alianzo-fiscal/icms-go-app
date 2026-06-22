@@ -53,11 +53,10 @@ def _encontrar_janela(titulo_parcial: str):
 
 def _fechar_popups():
     """Fecha qualquer popup Java pendente.
-    Usa EnumChildWindows para achar o botao OK pelo texto e clicar no centro exato.
+    Estrategia: foca a janela e usa teclado (Escape / Enter) pois botoes Swing
+    nao sao janelas Win32 e nao sao encontrados via EnumChildWindows.
     """
     fechou = False
-    _TEXTOS_BTN_OK  = ("ok", "sim", "yes", "fechar", "close", "continuar")
-    _TEXTOS_BTN_NAO = ("nao enviar", "nao enviar", "not send")
 
     def cb(hwnd, _):
         nonlocal fechou
@@ -66,45 +65,40 @@ def _fechar_popups():
         titulo = win32gui.GetWindowText(hwnd)
         for t in _TITULOS_POPUP:
             if t.lower() in titulo.lower():
-                left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-                w = right - left
-                h = bottom - top
+                _attach_foreground(hwnd)
+                time.sleep(0.4)
 
-                btn_ok_pos  = [None]
-                btn_nao_pos = [None]
+                # Verifica se ainda esta visivel apos focar (pode ter sumido)
+                if not win32gui.IsWindowVisible(hwnd):
+                    fechou = True
+                    break
 
+                # Detecta se e popup de erro critico ("Nao Enviar") pelo titulo ou filho
+                is_crash = False
+                textos = []
                 def cb_filho(h2, _):
-                    txt = win32gui.GetWindowText(h2).strip()
-                    if not txt:
-                        return
-                    tl = txt.lower()
-                    bl, bt, br, bb = win32gui.GetWindowRect(h2)
-                    cx = (bl + br) // 2
-                    cy = (bt + bb) // 2
-                    if any(t2 in tl for t2 in _TEXTOS_BTN_NAO) and btn_nao_pos[0] is None:
-                        btn_nao_pos[0] = (cx, cy)
-                    elif any(tl == t2 for t2 in _TEXTOS_BTN_OK) and btn_ok_pos[0] is None:
-                        btn_ok_pos[0] = (cx, cy)
-
+                    txt = win32gui.GetWindowText(h2)
+                    if txt:
+                        textos.append(txt.lower())
                 try:
                     win32gui.EnumChildWindows(hwnd, cb_filho, None)
                 except Exception:
                     pass
+                if any("nao enviar" in t2 or "nao enviar" in t2 or "not send" in t2
+                       for t2 in textos):
+                    is_crash = True
 
-                if btn_nao_pos[0]:
-                    pyautogui.click(*btn_nao_pos[0])
-                    logging.info(f"fechou popup '{titulo}' via botao 'Nao Enviar' em {btn_nao_pos[0]}")
-                elif btn_ok_pos[0]:
-                    pyautogui.click(*btn_ok_pos[0])
-                    logging.info(f"fechou popup '{titulo}' via botao OK em {btn_ok_pos[0]}")
+                if is_crash:
+                    # Escape = "Nao Enviar" em dialogs de crash Java
+                    pyautogui.press("escape")
+                    logging.info(f"fechou popup crash '{titulo}' via Escape")
                 else:
-                    fx = left + w * 0.50
-                    fy = top  + h * 0.88
-                    pyautogui.click(fx, fy)
-                    logging.info(f"fechou popup '{titulo}' via posicao fallback (50%,88%)")
+                    # Enter = confirma botao padrao (OK/Sim) em dialogs comuns
+                    pyautogui.press("enter")
+                    logging.info(f"fechou popup '{titulo}' via Enter")
 
                 fechou = True
-                time.sleep(0.5)
+                time.sleep(0.6)
                 break
 
     win32gui.EnumWindows(cb, None)
