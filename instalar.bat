@@ -43,9 +43,7 @@ echo [OK] Pastas criadas.
 echo.
 
 echo [3/4] Criando atalho na area de trabalho...
-set "VBS_SRC=%~dp0Iniciar ICMS GO.vbs"
-set "ICO_SRC=%~dp0ICMS360.ico"
-
-> "%TEMP%\criar_atalho.ps1" echo $vbs = '%VBS_SRC%'
->> "%TEMP%\criar_atalho.ps1" echo $ico = '%ICO_SRC%'
->> "%TEMP%\c
+python "%~dp0criar_atalho.py" "%~dp0"
+if %errorlevel% neq 0 (
+    echo AVISO: nao foi possivel criar o atalho automaticamente.
+    echo Voce pode criar manualmente: clique direito no deskt
