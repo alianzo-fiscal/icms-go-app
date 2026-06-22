@@ -617,7 +617,7 @@ with tab_sped:
     st.markdown("---")
 
     # ── upload de TXT ─────────────────────────────────────────────────────────
-    st.markdown("### 1. Upload dos arquivos TXT do SPED EFD")
+    st.markdown("### 1. Selecione os arquivos TXT do SPED EFD")
     uploaded_txts = st.file_uploader(
         "Selecione um ou mais arquivos TXT gerados pelo ERP",
         type=["txt"],
@@ -626,43 +626,63 @@ with tab_sped:
     )
 
     if uploaded_txts:
-        st.info(f"📎 {len(uploaded_txts)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_txts))
+        st.info(f"📎 {len(uploaded_txts)} arquivo(s): " + ", ".join(f.name for f in uploaded_txts))
 
-    if uploaded_txts and st.button("📥 Copiar para pasta monitorada", key="btn_copiar_sped"):
-        _pasta_monitor.mkdir(parents=True, exist_ok=True)
-        copiados = []
-        for _f in uploaded_txts:
-            _dest = _pasta_monitor / _f.name
-            _dest.write_bytes(_f.getvalue())
-            copiados.append(_f.name)
-        st.success("Arquivo(s) copiado(s) para a pasta monitorada:\n" + "\n".join(f"- {n}" for n in copiados))
+    # ── status da pasta monitorada ────────────────────────────────────────────
+    _pasta_monitor.mkdir(parents=True, exist_ok=True)
+    _txts_na_pasta = list(_pasta_monitor.glob("*.txt"))
+    if _txts_na_pasta:
+        st.success(f"📂 Pasta monitorada tem {len(_txts_na_pasta)} arquivo(s) aguardando: " +
+                   ", ".join(t.name for t in _txts_na_pasta))
+    else:
+        st.caption(f"📂 Pasta monitorada vazia: `{_pasta_monitor}`")
 
     st.markdown("---")
 
-    # ── Fase 1: importar + validar ────────────────────────────────────────────
+    # ── Fase 1: copia + importar + validar ───────────────────────────────────
     st.markdown("### 2. Fase 1 — Importar e Validar no PVA")
-    st.caption("O PVA Sped Fiscal será aberto automaticamente. Não interaja com o computador durante o processo.")
+    st.caption("Copia os arquivos para a pasta monitorada e executa a validação no PVA automaticamente.")
 
-    if st.button("▶️ Executar Fase 1 (Importar + Validar)", type="primary", key="btn_fase1"):
-        _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
-        with st.spinner("Processando... aguarde (pode levar vários minutos por arquivo)"):
-            try:
-                _result = subprocess.run(
-                    [sys.executable, str(_script)],
-                    capture_output=True, text=True, encoding="utf-8",
-                    cwd=str(_script.parent),
-                    timeout=600,
-                )
-                _output = (_result.stdout or "") + (_result.stderr or "")
-                if _result.returncode == 0:
-                    st.success("✅ Fase 1 concluída!")
-                else:
-                    st.warning("⚠️ Fase 1 terminou com erros. Veja o log abaixo.")
-                st.code(_output, language="text")
-            except subprocess.TimeoutExpired:
-                st.error("❌ Timeout (10 min). Verifique se o PVA está respondendo.")
-            except Exception as _exc:
-                st.error(f"❌ Erro: {_exc}")
+    _pode_fase1 = bool(uploaded_txts) or bool(_txts_na_pasta)
+    if not _pode_fase1:
+        st.info("ℹ️ Faça upload de pelo menos um arquivo TXT para continuar.")
+
+    if _pode_fase1 and st.button("▶️ Executar Fase 1 (Importar + Validar)", type="primary", key="btn_fase1"):
+        # Copia arquivos do uploader (se houver) para a pasta monitorada
+        if uploaded_txts:
+            for _f in uploaded_txts:
+                _dest = _pasta_monitor / _f.name
+                _dest.write_bytes(_f.getvalue())
+            st.write(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
+
+        # Verifica novamente após cópia
+        _txts_prontos = list(_pasta_monitor.glob("*.txt"))
+        if not _txts_prontos:
+            st.error(f"❌ Nenhum arquivo .txt encontrado em `{_pasta_monitor}` — verifique o upload.")
+        else:
+            st.write(f"✔ {len(_txts_prontos)} arquivo(s) prontos: " + ", ".join(t.name for t in _txts_prontos))
+            _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
+            with st.spinner("PVA abrindo... não interaja com o computador."):
+                try:
+                    _result = subprocess.run(
+                        [sys.executable, str(_script)],
+                        capture_output=True, text=True, encoding="utf-8",
+                        cwd=str(_script.parent),
+                        timeout=600,
+                    )
+                    _output = (_result.stdout or "") + (_result.stderr or "")
+                    if _result.returncode == 0 and _output.strip():
+                        st.success("✅ Fase 1 concluída!")
+                    elif not _output.strip():
+                        st.warning("⚠️ Nenhuma saída do script — verifique se o PVA está instalado.")
+                    else:
+                        st.warning("⚠️ Fase 1 com erros.")
+                    if _output.strip():
+                        st.code(_output, language="text")
+                except subprocess.TimeoutExpired:
+                    st.error("❌ Timeout (10 min). PVA não respondeu.")
+                except Exception as _exc:
+                    st.error(f"❌ Erro: {_exc}")
 
     # ── resultado_validacao.json ───────────────────────────────────────────────
     st.markdown("---")
