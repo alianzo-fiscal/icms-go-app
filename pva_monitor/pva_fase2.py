@@ -34,11 +34,12 @@ def main():
         print("Nenhum arquivo pendente para Fase 2.")
         return
 
-    print(f"\n{'='*60}")
-    print(f"  Fase 2 — {len(pendentes)} arquivo(s) para transmitir")
-    print(f"{'='*60}")
+    sep = "=" * 60
+    print(f"\n{sep}")
+    print(f"  Fase 2 -- {len(pendentes)} arquivo(s) para transmitir")
+    print(sep)
     for r in pendentes:
-        print(f"  • {r['arquivo']}")
+        print(f"  * {r['arquivo']}")
 
     print("\nPRE-REQUISITO: certificado digital e-CNPJ deve estar")
     print("configurado no PVA (Configuracoes -> Certificado Digital).")
@@ -64,7 +65,11 @@ def main():
         _salvar_resultado(log_json, resultados)
         print(f"  -> {'TRANSMITIDO' if ok else 'ERRO'}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{sep}")
     ok_count = sum(1 for r in resultados if r.get("fase2_ok"))
     print(f"  Fase 2 concluida: {ok_count} transmitido(s)")
-    print(f"{'='*60}\
+    print(sep)
+
+
+if __name__ == "__main__":
+    main()
