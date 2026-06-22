@@ -252,6 +252,14 @@ class PVAAutomacao:
         _fechar_popups()
         return True
 
+    def fechar_pva(self):
+        """Encerra o processo do PVA via taskkill (limpa estado para proxima execucao)."""
+        import subprocess as _sp
+        exe_name = self.pva_exe.name  # ex: SpedEFD.exe
+        _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
+        logging.info(f"PVA encerrado ({exe_name})")
+        time.sleep(2)
+
     # ── fluxos completos ─────────────────────────────────────────────────────
 
     def fase1_processar(self, caminho: Path) -> bool:

@@ -120,11 +120,18 @@ def main():
         _salvar_resultado(log_json, resultados)
         print(f"  -> {status}")
 
-    print(f"\n{'='*60}")
+    # Fecha o PVA ao final — evita acumulo de estado e crash em execucoes longas
+    try:
+        pva.fechar_pva()
+    except Exception:
+        pass
+
+    sep = "=" * 60
     ok_count  = sum(1 for r in resultados if r.get("status") == "OK")
     err_count = sum(1 for r in resultados if r.get("status") != "OK")
+    print(f"\n{sep}")
     print(f"  Concluido: {ok_count} OK  |  {err_count} com erro")
-    print(f"{'='*60}\n")
+    print(f"{sep}\n")
 
 
 if __name__ == "__main__":
