@@ -107,7 +107,7 @@ def main():
         status = "OK" if ok else "ERRO"
         destino = validos if ok else erros
         try:
-            arq.rename(destino / arq.name)
+            arq.replace(destino / arq.name)  # replace() sobrescreve se ja existir
         except Exception as e:
             logging.warning(f"Nao foi possivel mover {arq.name}: {e}")
 
@@ -125,7 +125,3 @@ def main():
     err_count = sum(1 for r in resultados if r.get("status") != "OK")
     print(f"  Concluido: {ok_count} OK  |  {err_count} com erro")
     print(f"{'='*60}\n")
-
-
-if __name__ == "__main__":
-    main()
