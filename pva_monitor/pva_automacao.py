@@ -54,6 +54,9 @@ def _encontrar_janela(titulo_parcial: str):
 def _fechar_popups():
     """Fecha qualquer popup Java pendente antes de prosseguir."""
     fechou = False
+    _TEXTOS_BTN_OK  = ("ok", "sim", "yes", "fechar", "close", "continuar")
+    _TEXTOS_BTN_NAO = ("nao enviar", "não enviar", "not send")
+
     def cb(hwnd, _):
         nonlocal fechou
         if not win32gui.IsWindowVisible(hwnd):
@@ -64,21 +67,46 @@ def _fechar_popups():
                 left, top, right, bottom = win32gui.GetWindowRect(hwnd)
                 w = right - left
                 h = bottom - top
-                # Verifica se e popup de erro critico ("Nao Enviar")
-                textos_filhos = []
+
+                # Busca botao filho pelo texto para clicar no centro exato
+                btn_ok_pos     = [None]
+                btn_nao_pos    = [None]
+
                 def cb_filho(h2, _):
-                    txt = win32gui.GetWindowText(h2)
-                    if txt:
-                        textos_filhos.append(txt.lower())
-                win32gui.EnumChildWindows(hwnd, cb_filho, None)
-                if any("nao enviar" in t2 or "não enviar" in t2 or "not send" in t2 for t2 in textos_filhos):
-                    pyautogui.click(left + w * 0.38, top + h * 0.88)
+                    txt = win32gui.GetWindowText(h2).strip()
+                    if not txt:
+                        return
+                    tl = txt.lower()
+                    bl, bt, br, bb = win32gui.GetWindowRect(h2)
+                    cx = (bl + br) // 2
+                    cy = (bt + bb) // 2
+                    if any(t2 in tl for t2 in _TEXTOS_BTN_NAO) and btn_nao_pos[0] is None:
+                        btn_nao_pos[0] = (cx, cy)
+                    elif any(tl == t2 for t2 in _TEXTOS_BTN_OK) and btn_ok_pos[0] is None:
+                        btn_ok_pos[0] = (cx, cy)
+
+                try:
+                    win32gui.EnumChildWindows(hwnd, cb_filho, None)
+                except Exception:
+                    pass
+
+                if btn_nao_pos[0]:
+                    pyautogui.click(*btn_nao_pos[0])
+                    logging.info(f"fechou popup '{titulo}' via botao 'Nao Enviar' em {btn_nao_pos[0]}")
+                elif btn_ok_pos[0]:
+                    pyautogui.click(*btn_ok_pos[0])
+                    logging.info(f"fechou popup '{titulo}' via botao OK em {btn_ok_pos[0]}")
                 else:
-                    pyautogui.click(left + w * 0.38, top + h * 0.94)
-                logging.info(f"fechou popup: '{titulo}'")
+                    # Fallback: centro inferior do dialog
+                    fx = left + w * 0.50
+                    fy = top  + h * 0.88
+                    pyautogui.click(fx, fy)
+                    logging.info(f"fechou popup '{titulo}' via posicao fallback (50%,88%)")
+
                 fechou = True
                 time.sleep(0.5)
                 break
+
     win32gui.EnumWindows(cb, None)
     return fechou
 
@@ -206,30 +234,4 @@ class PVAAutomacao:
 
     def assinar(self) -> bool:
         """Ctrl+S -> assina com certificado digital."""
-        hwnd = self._focar_pva()
-        if not hwnd:
-            return False
-        pyautogui.hotkey("ctrl", "s")
-        time.sleep(self.cfg.get("aguardar_assinatura_segundos", 60))
-        _fechar_popups()
-        return True
-
-    def transmitir(self) -> bool:
-        """Ctrl+T -> transmite ao SEFAZ."""
-        hwnd = self._focar_pva()
-        if not hwnd:
-            return False
-        pyautogui.hotkey("ctrl", "t")
-        time.sleep(self.cfg.get("aguardar_transmissao_segundos", 120))
-        _fechar_popups()
-        return True
-
-    # ── fluxos completos ─────────────────────────────────────────────────────
-
-    def fase1_processar(self, caminho: Path) -> bool:
-        """Importa + valida um arquivo TXT. Escrituracao fica aberta no PVA para Fase 2."""
-        logging.info(f"[Fase1] Processando: {caminho.name}")
-        self.fechar_escrituracao()
-        if not self.abrir_pva():
-            logging.error("Nao foi possivel abrir o PVA")
-            r
+        hwn
