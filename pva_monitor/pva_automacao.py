@@ -142,13 +142,19 @@ class PVAAutomacao:
     def abrir_pva(self):
         if self._hwnd_pva():
             logging.info("PVA ja esta aberto")
+            _fechar_popups()   # fecha popup de crash pendente antes de prosseguir
+            time.sleep(0.5)
             return True
         logging.info(f"Abrindo PVA: {self.pva_exe}")
         subprocess.Popen([str(self.pva_exe)])
         ok = self._aguardar_pva()
         if ok:
+            # Fecha popups de startup (pode aparecer com delay — tenta ate 5x)
             time.sleep(2)
-            _fechar_popups()
+            for _ in range(5):
+                if not _fechar_popups():
+                    break
+                time.sleep(1.5)
         return ok
 
     def fechar_escrituracao(self):
