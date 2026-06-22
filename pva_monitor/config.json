@@ -1,0 +1,16 @@
+{
+  "pasta_monitorada"               : "",
+  "pasta_validados"                : "",
+  "pasta_com_erro"                 : "",
+  "pasta_entrega"                  : "",
+  "pva_executavel"                 : "C:\\Arquivos de Programas RFB\\Programas SPED\\Fiscal\\SpedEFD.exe",
+  "pva_titulo_janela"              : "EFD ICMS/IPI",
+  "aguardar_pva_abrir_segundos"    : 40,
+  "aguardar_importacao_segundos"   : 90,
+  "aguardar_validacao_segundos"    : 20,
+  "aguardar_geracao_segundos"      : 30,
+  "aguardar_assinatura_segundos"   : 60,
+  "aguardar_transmissao_segundos"  : 120,
+  "log_arquivo"                    : "",
+  "log_validacao"                  : ""
+}

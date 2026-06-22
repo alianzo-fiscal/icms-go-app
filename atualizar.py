@@ -19,6 +19,13 @@ ARQUIVOS = [
     "apuracao_3abas.py",
     "combinar_xlsx.py",
     "apuracao-icms-go/scripts/combinar_xlsx.py",
+    ".streamlit/config.toml",
+    "pva_monitor/pva_automacao.py",
+    "pva_monitor/fase1_lote.py",
+    "pva_monitor/pva_fase2.py",
+    "pva_monitor/fase1_lote.bat",
+    "pva_monitor/fase2_assinar_transmitir.bat",
+    "pva_monitor/config.json",
 ]
 
 BASE_DIR = Path(__file__).parent
@@ -83,18 +90,4 @@ def via_github_api():
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 destino.write_bytes(resp.read())
-        except Exception:
-            pass  # arquivo não encontrado, ignora
-
-    sha_file.write_text(sha_remoto, encoding="utf-8")
-    return True
-
-
-def main():
-    if via_git():
-        return
-    via_github_api()
-
-
-if __name__ == "__main__":
-    main()
+        excep
