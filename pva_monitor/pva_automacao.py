@@ -292,14 +292,20 @@ class PVAAutomacao:
         return ok
 
     def fase2_processar(self, caminho: Path, index: int = 0) -> bool:
-        """Gera + assina + transmite escrituracao ja importada na Fase 1."""
-        logging.info(f"[Fase2] Processando posicao {index}: {caminho.name}")
+        """Re-importa da pasta_validados, gera, assina e transmite.
+        Nao depende do banco do PVA persistir apos Fase 1 — reimporta sempre.
+        """
+        logging.info(f"[Fase2] Processando: {caminho.name}")
         self.fechar_escrituracao()
         if not self.abrir_pva():
             logging.error("Nao foi possivel abrir o PVA")
             return False
-        if not self.abrir_escrituracao_por_posicao(index):
-            logging.error(f"Falha ao abrir escrituracao na posicao {index}")
+        # Reimporta o arquivo (banco pode ter sido perdido ao fechar o PVA)
+        if not self.importar_arquivo(caminho):
+            logging.error(f"Falha ao reimportar: {caminho.name}")
+            return False
+        if not self.abrir_escrituracao_mais_recente():
+            logging.error("Falha ao abrir escrituracao apos reimportacao")
             return False
         if not self.gerar_arquivo():
             logging.error("Falha ao gerar arquivo")
