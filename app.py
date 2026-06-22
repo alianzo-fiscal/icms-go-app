@@ -671,13 +671,13 @@ with tab_sped:
             _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
             _env = _os.environ.copy()
             _env["PYTHONUNBUFFERED"] = "1"
-            with st.spinner("PVA abrindo... não interaja com o computador."):
+            with st.spinner(f"PVA processando {len(_txts_prontos)} arquivo(s)... não interaja com o computador (pode levar minutos)."):
                 try:
                     _result = subprocess.run(
                         [sys.executable, str(_script)],
                         capture_output=True, text=True, encoding="utf-8",
                         cwd=str(_script.parent),
-                        timeout=600,
+                        timeout=5400,  # 90 min para lotes grandes
                         env=_env,
                     )
                     _output = (_result.stdout or "") + (_result.stderr or "")
