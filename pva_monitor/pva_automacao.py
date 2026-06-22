@@ -165,6 +165,24 @@ class PVAAutomacao:
         time.sleep(2.5)
         return True
 
+    def abrir_escrituracao_por_posicao(self, index: int = 0) -> bool:
+        """Ctrl+A -> Home -> Down x index -> Enter x2 para abrir pela posicao na lista."""
+        hwnd = self._focar_pva()
+        if not hwnd:
+            return False
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(2)
+        pyautogui.press("home")    # vai para o primeiro item da lista
+        time.sleep(0.4)
+        for _ in range(index):
+            pyautogui.press("down")
+            time.sleep(0.2)
+        pyautogui.press("enter")   # seleciona no JTable
+        time.sleep(0.4)
+        pyautogui.press("enter")   # confirma botao OK
+        time.sleep(2.5)
+        return True
+
     def validar(self) -> bool:
         """Ctrl+V -> aguarda validacao -> fecha popup resultado."""
         hwnd = self._focar_pva()
@@ -209,31 +227,11 @@ class PVAAutomacao:
     # ── fluxos completos ─────────────────────────────────────────────────────
 
     def fase1_processar(self, caminho: Path) -> bool:
-        """Importa + valida um arquivo TXT. Retorna True se OK."""
+        """Importa + valida um arquivo TXT. Escrituracao fica aberta no PVA para Fase 2."""
         logging.info(f"[Fase1] Processando: {caminho.name}")
         self.fechar_escrituracao()
         if not self.abrir_pva():
             logging.error("Nao foi possivel abrir o PVA")
             return False
         if not self.importar_arquivo(caminho):
-            return False
-        if not self.abrir_escrituracao_mais_recente():
-            return False
-        ok = self.validar()
-        self.fechar_escrituracao()
-        return ok
-
-    def fase2_processar(self, caminho: Path) -> bool:
-        """Gera + assina + transmite um arquivo validado."""
-        logging.info(f"[Fase2] Transmitindo: {caminho.name}")
-        self.fechar_escrituracao()
-        if not self.abrir_pva():
-            return False
-        if not self.abrir_escrituracao_mais_recente():
-            return False
-        if not self.gerar_arquivo():
-            return False
-        if not self.assinar():
-            return False
-        ok = self.transmitir()
-        self.fechar_escriturac
+            return F

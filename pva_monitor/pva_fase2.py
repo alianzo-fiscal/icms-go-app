@@ -50,12 +50,12 @@ def main():
     pva = PVAAutomacao(cfg)
     pasta_validados = Path(cfg["pasta_validados"])
 
-    for r in pendentes:
+    for i, r in enumerate(pendentes):
         arq = pasta_validados / r["arquivo"]
-        print(f"\n[FASE2] {r['arquivo']}")
+        print(f"\n[FASE2] {r['arquivo']} (posicao {i} no PVA)")
         ok = False
         try:
-            ok = pva.fase2_processar(arq)
+            ok = pva.fase2_processar(arq, index=i)
         except Exception as e:
             logging.error(f"Excecao na Fase 2 em {r['arquivo']}: {e}")
 
@@ -67,8 +67,4 @@ def main():
     print(f"\n{'='*60}")
     ok_count = sum(1 for r in resultados if r.get("fase2_ok"))
     print(f"  Fase 2 concluida: {ok_count} transmitido(s)")
-    print(f"{'='*60}\n")
-
-
-if __name__ == "__main__":
-    main()
+    print(f"{'='*60}\
