@@ -71,7 +71,7 @@ def _fechar_popups():
                     if txt:
                         textos_filhos.append(txt.lower())
                 win32gui.EnumChildWindows(hwnd, cb_filho, None)
-                if any("nao enviar" in t2 or "not send" in t2 for t2 in textos_filhos):
+                if any("nao enviar" in t2 or "não enviar" in t2 or "not send" in t2 for t2 in textos_filhos):
                     pyautogui.click(left + w * 0.38, top + h * 0.88)
                 else:
                     pyautogui.click(left + w * 0.38, top + h * 0.94)
@@ -236,5 +236,4 @@ class PVAAutomacao:
         if not self.assinar():
             return False
         ok = self.transmitir()
-        self.fechar_escrituracao()
-        return ok
+        self.fechar_escriturac
