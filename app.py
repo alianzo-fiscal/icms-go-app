@@ -686,4 +686,4 @@ with tab_sped:
         except Exception as _exc:
             st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
     else:
-        st.info("Nenhum resultado ainda. Execute a Fa
+        st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
