@@ -57,7 +57,7 @@ def _fechar_popups():
     """
     fechou = False
     _TEXTOS_BTN_OK  = ("ok", "sim", "yes", "fechar", "close", "continuar")
-    _TEXTOS_BTN_NAO = ("nao enviar", "não enviar", "not send")
+    _TEXTOS_BTN_NAO = ("nao enviar", "nao enviar", "not send")
 
     def cb(hwnd, _):
         nonlocal fechou
@@ -245,4 +245,52 @@ class PVAAutomacao:
     def transmitir(self) -> bool:
         """Ctrl+T -> transmite ao SEFAZ."""
         hwnd = self._focar_pva()
-        if not h
+        if not hwnd:
+            return False
+        pyautogui.hotkey("ctrl", "t")
+        time.sleep(self.cfg.get("aguardar_transmissao_segundos", 120))
+        _fechar_popups()
+        return True
+
+    # ── fluxos completos ─────────────────────────────────────────────────────
+
+    def fase1_processar(self, caminho: Path) -> bool:
+        """Importa + valida um arquivo TXT. Escrituracao fica aberta no PVA para Fase 2."""
+        logging.info(f"[Fase1] Processando: {caminho.name}")
+        self.fechar_escrituracao()
+        if not self.abrir_pva():
+            logging.error("Nao foi possivel abrir o PVA")
+            return False
+        if not self.importar_arquivo(caminho):
+            logging.error(f"Falha ao importar: {caminho.name}")
+            return False
+        if not self.abrir_escrituracao_mais_recente():
+            logging.error("Falha ao abrir escrituracao mais recente")
+            return False
+        ok = self.validar()
+        if not ok:
+            logging.error(f"Falha na validacao: {caminho.name}")
+        # NAO fecha escrituracao — fica no PVA para Fase 2
+        return ok
+
+    def fase2_processar(self, caminho: Path, index: int = 0) -> bool:
+        """Gera + assina + transmite escrituracao ja importada na Fase 1."""
+        logging.info(f"[Fase2] Processando posicao {index}: {caminho.name}")
+        self.fechar_escrituracao()
+        if not self.abrir_pva():
+            logging.error("Nao foi possivel abrir o PVA")
+            return False
+        if not self.abrir_escrituracao_por_posicao(index):
+            logging.error(f"Falha ao abrir escrituracao na posicao {index}")
+            return False
+        if not self.gerar_arquivo():
+            logging.error("Falha ao gerar arquivo")
+            return False
+        if not self.assinar():
+            logging.error("Falha na assinatura")
+            return False
+        ok = self.transmitir()
+        if not ok:
+            logging.error(f"Falha na transmissao: {caminho.name}")
+        self.fechar_escrituracao()
+        return ok
