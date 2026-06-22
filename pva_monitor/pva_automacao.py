@@ -52,12 +52,12 @@ def _encontrar_janela(titulo_parcial: str):
 
 
 def _fechar_popups():
-    """Fecha qualquer popup Java pendente antes de prosseguir.
-    Usa EnumChildWindows para encontrar o botao OK pelo texto e clicar no centro exato.
+    """Fecha qualquer popup Java pendente.
+    Usa EnumChildWindows para achar o botao OK pelo texto e clicar no centro exato.
     """
     fechou = False
     _TEXTOS_BTN_OK  = ("ok", "sim", "yes", "fechar", "close", "continuar")
-    _TEXTOS_BTN_NAO = ("nao enviar", "nao enviar", "not send")
+    _TEXTOS_BTN_NAO = ("nao enviar", "not send")
 
     def cb(hwnd, _):
         nonlocal fechou
@@ -70,7 +70,6 @@ def _fechar_popups():
                 w = right - left
                 h = bottom - top
 
-                # Busca botao filho pelo texto para clicar no centro exato
                 btn_ok_pos  = [None]
                 btn_nao_pos = [None]
 
@@ -99,7 +98,6 @@ def _fechar_popups():
                     pyautogui.click(*btn_ok_pos[0])
                     logging.info(f"fechou popup '{titulo}' via botao OK em {btn_ok_pos[0]}")
                 else:
-                    # Fallback: centro inferior do dialog
                     fx = left + w * 0.50
                     fy = top  + h * 0.88
                     pyautogui.click(fx, fy)
@@ -150,7 +148,7 @@ class PVAAutomacao:
         ok = self._aguardar_pva()
         if ok:
             time.sleep(2)
-            _fechar_popups()   # "Atualizar Tabelas" ou avisos iniciais
+            _fechar_popups()
         return ok
 
     def fechar_escrituracao(self):
@@ -170,7 +168,6 @@ class PVAAutomacao:
             return False
         pyautogui.hotkey("ctrl", "i")
         time.sleep(1.5)
-        # Cola o caminho no dialogo de arquivo
         pyperclip.copy(str(caminho))
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.5)
@@ -189,27 +186,27 @@ class PVAAutomacao:
         time.sleep(2)
         pyautogui.hotkey("ctrl", "end")
         time.sleep(0.6)
-        pyautogui.press("enter")   # seleciona no JTable
+        pyautogui.press("enter")
         time.sleep(0.4)
-        pyautogui.press("enter")   # confirma botao OK
-        time.sleep(6)              # aguarda PVA carregar o arquivo (TXTs grandes ~4MB)
+        pyautogui.press("enter")
+        time.sleep(6)
         return True
 
     def abrir_escrituracao_por_posicao(self, index: int = 0) -> bool:
-        """Ctrl+A -> Home -> Down x index -> Enter x2 para abrir pela posicao na lista."""
+        """Ctrl+A -> Home -> Down x index -> Enter x2."""
         hwnd = self._focar_pva()
         if not hwnd:
             return False
         pyautogui.hotkey("ctrl", "a")
         time.sleep(2)
-        pyautogui.press("home")    # vai para o primeiro item da lista
+        pyautogui.press("home")
         time.sleep(0.4)
         for _ in range(index):
             pyautogui.press("down")
             time.sleep(0.2)
-        pyautogui.press("enter")   # seleciona no JTable
+        pyautogui.press("enter")
         time.sleep(0.4)
-        pyautogui.press("enter")   # confirma botao OK
+        pyautogui.press("enter")
         time.sleep(2.5)
         return True
 
@@ -232,4 +229,68 @@ class PVAAutomacao:
             return False
         pyautogui.hotkey("ctrl", "g")
         time.sleep(self.cfg.get("aguardar_geracao_segundos", 30))
-        _fechar_
+        _fechar_popups()
+        return True
+
+    def assinar(self) -> bool:
+        """Ctrl+S -> assina com certificado digital."""
+        hwnd = self._focar_pva()
+        if not hwnd:
+            return False
+        pyautogui.hotkey("ctrl", "s")
+        time.sleep(self.cfg.get("aguardar_assinatura_segundos", 60))
+        _fechar_popups()
+        return True
+
+    def transmitir(self) -> bool:
+        """Ctrl+T -> transmite ao SEFAZ."""
+        hwnd = self._focar_pva()
+        if not hwnd:
+            return False
+        pyautogui.hotkey("ctrl", "t")
+        time.sleep(self.cfg.get("aguardar_transmissao_segundos", 120))
+        _fechar_popups()
+        return True
+
+    # ── fluxos completos ─────────────────────────────────────────────────────
+
+    def fase1_processar(self, caminho: Path) -> bool:
+        """Importa + valida um arquivo TXT. Escrituracao fica aberta no PVA para Fase 2."""
+        logging.info(f"[Fase1] Processando: {caminho.name}")
+        self.fechar_escrituracao()
+        if not self.abrir_pva():
+            logging.error("Nao foi possivel abrir o PVA")
+            return False
+        if not self.importar_arquivo(caminho):
+            logging.error(f"Falha ao importar: {caminho.name}")
+            return False
+        if not self.abrir_escrituracao_mais_recente():
+            logging.error("Falha ao abrir escrituracao mais recente")
+            return False
+        ok = self.validar()
+        if not ok:
+            logging.error(f"Falha na validacao: {caminho.name}")
+        # NAO fecha — fica no PVA para Fase 2
+        return ok
+
+    def fase2_processar(self, caminho: Path, index: int = 0) -> bool:
+        """Gera + assina + transmite escrituracao ja importada na Fase 1."""
+        logging.info(f"[Fase2] Processando posicao {index}: {caminho.name}")
+        self.fechar_escrituracao()
+        if not self.abrir_pva():
+            logging.error("Nao foi possivel abrir o PVA")
+            return False
+        if not self.abrir_escrituracao_por_posicao(index):
+            logging.error(f"Falha ao abrir escrituracao na posicao {index}")
+            return False
+        if not self.gerar_arquivo():
+            logging.error("Falha ao gerar arquivo")
+            return False
+        if not self.assinar():
+            logging.error("Falha na assinatura")
+            return False
+        ok = self.transmitir()
+        if not ok:
+            logging.error(f"Falha na transmissao: {caminho.name}")
+        self.fechar_escrituracao()
+        return ok
