@@ -273,11 +273,13 @@ class PVAAutomacao:
     # ── Fase 1: importar + validar ──────────────────────────────────────────
 
     def fase1_processar(self, caminho: Path) -> bool:
-        """Importa e valida. PVA permanece aberto com a escrituracao no banco.
-        NAO fecha o PVA — Fase 2 usa as escrituracoes ja importadas.
+        """Importa e valida. PVA permanece aberto com a escrituracao ativa.
+        NAO fecha a escrituracao nem o PVA — Fase 2 usa diretamente.
         """
         logging.info(f"[Fase1] {caminho.name}")
-        self.fechar_escrituracao()
+        # Fecha popup pendente, mas NAO fecha escrituracao aberta via Ctrl+F
+        # (Ctrl+F pode remover escrituracao do banco em algumas versoes do PVA)
+        _fechar_popups()
         if not self.abrir_pva():
             logging.error("PVA nao encontrado")
             return False
@@ -290,7 +292,7 @@ class PVAAutomacao:
         ok = self.validar()
         if not ok:
             logging.error(f"Falha na validacao: {caminho.name}")
-        self.fechar_escrituracao()
+        # Escrituracao permanece aberta — Fase 2 usa ela diretamente
         return ok
 
     # ── Fase 2: gerar + assinar + transmitir ─────────────────────────────────
