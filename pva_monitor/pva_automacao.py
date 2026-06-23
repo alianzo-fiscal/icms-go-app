@@ -151,7 +151,9 @@ class PVAAutomacao:
         time.sleep(0.5)
         pyautogui.press("enter")
         timeout = self.cfg.get("aguardar_importacao_segundos", 90)
-        time.sleep(min(timeout, 5))
+        # Aguarda o tempo COMPLETO para o import terminar antes de fechar popups
+        # (min(timeout,5) estava cancelando o import com Escape apos 5s)
+        time.sleep(timeout)
         _fechar_popups()
         return True
 

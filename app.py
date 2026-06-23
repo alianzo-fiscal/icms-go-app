@@ -671,6 +671,7 @@ with tab_sped:
             _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
             _env = _os.environ.copy()
             _env["PYTHONUNBUFFERED"] = "1"
+            _env["PYTHONUTF8"] = "1"
             with st.spinner(f"PVA processando {len(_txts_prontos)} arquivo(s)... não interaja com o computador (pode levar minutos)."):
                 try:
                     _result = subprocess.run(
@@ -753,6 +754,7 @@ with tab_sped:
         import os as _os2
         _env2 = _os2.environ.copy()
         _env2["PYTHONUNBUFFERED"] = "1"
+        _env2["PYTHONUTF8"] = "1"
         with st.spinner("Gerando, assinando e transmitindo... não interaja com o computador."):
             try:
                 _result2 = subprocess.run(
