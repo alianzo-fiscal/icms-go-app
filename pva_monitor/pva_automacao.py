@@ -121,12 +121,15 @@ class PVAAutomacao:
         subprocess.Popen([str(self.pva_exe)])
         ok = self._aguardar_pva()
         if ok:
-            # Fecha popups de startup (pode aparecer com delay — tenta ate 5x)
-            time.sleep(2)
-            for _ in range(5):
+            # Fecha popups de startup (pode aparecer com delay — tenta ate 8x)
+            time.sleep(3)
+            for _ in range(8):
                 if not _fechar_popups():
                     break
-                time.sleep(1.5)
+                time.sleep(2.0)
+            # Pausa extra para PVA estabilizar apos fechar popups
+            time.sleep(3)
+            logging.info("PVA pronto — popups de startup fechados")
         return ok
 
     def fechar_escrituracao(self):
@@ -262,11 +265,10 @@ class PVAAutomacao:
                 break
             time.sleep(0.5)
 
-        # 4. Fallback: taskkill apenas se ainda estiver aberto
+        # 4. Fallback: taskkill via javaw.exe (PVA roda como processo Java)
         if self._hwnd_pva():
-            exe_name = self.pva_exe.name
-            _sp.run(["taskkill", "/F", "/IM", exe_name], capture_output=True)
-            logging.warning(f"PVA nao fechou graciosamente — taskkill usado ({exe_name})")
+            _sp.run(["taskkill", "/F", "/IM", "javaw.exe"], capture_output=True)
+            logging.warning("PVA nao fechou graciosamente — taskkill javaw.exe usado")
             time.sleep(2)
 
         time.sleep(1)
@@ -279,21 +281,21 @@ class PVAAutomacao:
         NAO fecha a escrituracao nem o PVA — Fase 2 usa diretamente.
         """
         logging.info(f"[Fase1] {caminho.name}")
-        # Fecha popup pendente, mas NAO fecha escrituracao aberta via Ctrl+F
-        # (Ctrl+F pode remover escrituracao do banco em algumas versoes do PVA)
         _fechar_popups()
         if not self.abrir_pva():
             logging.error("PVA nao encontrado")
             return False
+        logging.info("PVA aberto — iniciando importacao")
         if not self.importar_arquivo(caminho):
             logging.error(f"Falha ao importar: {caminho.name}")
             return False
+        logging.info("Importacao concluida — abrindo escrituracao")
         if not self.abrir_escrituracao_mais_recente():
             logging.error("Falha ao abrir escrituracao")
             return False
+        logging.info("Escrituracao aberta — iniciando validacao")
         ok = self.validar()
-        if not ok:
-            logging.error(f"Falha na validacao: {caminho.name}")
+        logging.info(f"Validacao concluida: {'OK' if ok else 'ERRO'}")
         # Escrituracao permanece aberta — Fase 2 usa ela diretamente
         return ok
 
