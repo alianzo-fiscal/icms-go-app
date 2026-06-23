@@ -2,6 +2,10 @@
 Fase 1 em lote: importa e valida todos os .txt presentes na pasta monitorada.
 Executar: python fase1_lote.py   ou   fase1_lote.bat
 """
+import sys as _sys_debug
+print("DEBUG: fase1_lote.py iniciando", flush=True)
+print(f"DEBUG: Python {_sys_debug.version}", flush=True)
+print(f"DEBUG: stdout encoding = {_sys_debug.stdout.encoding}", flush=True)
 import json
 import logging
 import sys
