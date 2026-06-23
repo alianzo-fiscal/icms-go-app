@@ -241,7 +241,7 @@ def gerar_apuracao(output_path, periodo, filiais, debito, credito, difal_e, difa
     ws.sheet_properties.tabColor = C_DARK
     ws.freeze_panes = 'B4'
 
-    fils = sorted(filiais)
+    fils = sorted(str(f) for f in filiais if f == f and f is not None)
     ncols = len(fils) + 2  # col A desc + filiais + total
 
     ws.column_dimensions['A'].width = 44
@@ -510,7 +510,7 @@ def main():
     filiais = set()
     if len(sai) > 0: filiais |= set(sai['_FILIAL'].unique())
     if len(ent) > 0: filiais |= set(ent['_FILIAL'].unique())
-    fils = sorted(filiais)
+    fils = sorted(str(f) for f in filiais if f == f and f is not None)
     print('  Filiais: ' + ', '.join(fils), flush=True)
 
     print('\nCalculando apuracao...', flush=True)
