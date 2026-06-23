@@ -726,3 +726,51 @@ with tab_sped:
             st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
     else:
         st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
+
+    # ── Fase 2: gerar + assinar + transmitir ─────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 4. Fase 2 — Gerar, Assinar e Transmitir")
+    st.caption("Execute após a Fase 1. O PVA deve estar aberto com as escriturações validadas.")
+
+    _pendentes_f2 = []
+    if _log_json_path.exists():
+        try:
+            import json as _json3
+            _todos = _json3.loads(_log_json_path.read_text(encoding="utf-8"))
+            _pendentes_f2 = [r for r in _todos if r.get("status") == "OK" and not r.get("fase2_ok")]
+        except Exception:
+            pass
+
+    if _pendentes_f2:
+        st.info(f"📋 {len(_pendentes_f2)} arquivo(s) aguardando Fase 2: " +
+                ", ".join(r["arquivo"] for r in _pendentes_f2))
+    else:
+        st.caption("Nenhum arquivo pendente para Fase 2.")
+
+    if _pendentes_f2 and st.button("✍️ Executar Fase 2 (Gerar + Assinar + Transmitir)",
+                                    type="primary", key="btn_fase2"):
+        _script2 = Path(__file__).parent / "pva_monitor" / "pva_fase2.py"
+        import os as _os2
+        _env2 = _os2.environ.copy()
+        _env2["PYTHONUNBUFFERED"] = "1"
+        with st.spinner("Gerando, assinando e transmitindo... não interaja com o computador."):
+            try:
+                _result2 = subprocess.run(
+                    [sys.executable, str(_script2)],
+                    input="SIM\n",
+                    capture_output=True, text=True, encoding="utf-8",
+                    cwd=str(_script2.parent),
+                    timeout=7200,
+                    env=_env2,
+                )
+                _output2 = (_result2.stdout or "") + (_result2.stderr or "")
+                if _result2.returncode == 0:
+                    st.success("Fase 2 concluída!")
+                else:
+                    st.warning("Fase 2 com erros.")
+                st.code(_output2 or "(sem saída)", language="text")
+                st.rerun()
+            except subprocess.TimeoutExpired:
+                st.error("Timeout (2h). PVA não respondeu.")
+            except Exception as _exc2:
+                st.error(f"Erro: {_exc2}")
