@@ -1,8 +1,7 @@
 """
-Fase 2: gerar + assinar + transmitir arquivos validados na Fase 1.
-Le resultado_validacao.json e processa apenas itens com status=OK sem fase2_ok.
-Requer certificado digital e-CNPJ configurado no PVA.
-Executar: python pva_fase2.py   ou   fase2_assinar_transmitir.bat
+Fase 2: gerar + assinar + transmitir escrituracoes ja validadas no PVA.
+Pressupoe que a Fase 1 foi executada e o PVA esta aberto com as escrituracoes no banco.
+Executar: python pva_fase2.py
 """
 import json
 import logging
@@ -36,27 +35,25 @@ def main():
 
     sep = "=" * 60
     print(f"\n{sep}")
-    print(f"  Fase 2 -- {len(pendentes)} arquivo(s) para transmitir")
+    print(f"  Fase 2 — {len(pendentes)} arquivo(s) para gerar/assinar/transmitir")
     print(sep)
-    for r in pendentes:
-        print(f"  * {r['arquivo']}")
+    for i, r in enumerate(pendentes):
+        print(f"  [{i}] {r['arquivo']}")
 
-    print("\nPRE-REQUISITO: certificado digital e-CNPJ deve estar")
-    print("configurado no PVA (Configuracoes -> Certificado Digital).")
+    print("\nCertifique-se de que o PVA esta aberto com as escrituracoes")
+    print("validadas na Fase 1. NAO interaja com o computador durante o processo.")
     conf = input("\nDigite SIM para continuar: ").strip().upper()
     if conf != "SIM":
         print("Cancelado.")
         return
 
     pva = PVAAutomacao(cfg)
-    pasta_validados = Path(cfg["pasta_validados"])
 
     for i, r in enumerate(pendentes):
-        arq = pasta_validados / r["arquivo"]
         print(f"\n[FASE2] {r['arquivo']} (posicao {i} no PVA)")
         ok = False
         try:
-            ok = pva.fase2_processar(arq, index=i)
+            ok = pva.fase2_processar(index=i)
         except Exception as e:
             logging.error(f"Excecao na Fase 2 em {r['arquivo']}: {e}")
 
@@ -64,6 +61,11 @@ def main():
         r["fase2_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _salvar_resultado(log_json, resultados)
         print(f"  -> {'TRANSMITIDO' if ok else 'ERRO'}")
+
+    try:
+        pva.fechar_pva()
+    except Exception:
+        pass
 
     print(f"\n{sep}")
     ok_count = sum(1 for r in resultados if r.get("fase2_ok"))

@@ -270,62 +270,54 @@ class PVAAutomacao:
         time.sleep(1)
         logging.info("PVA fechado com sucesso")
 
-    # ── fluxo completo ───────────────────────────────────────────────────────
+    # ── Fase 1: importar + validar ──────────────────────────────────────────
 
-    def processar_completo(self, caminho: Path) -> bool:
-        """Fluxo completo em uma unica sessao PVA:
-        Importar -> Validar -> Gerar -> Assinar -> Transmitir
-        PVA nao e fechado entre etapas — evita perda do banco.
+    def fase1_processar(self, caminho: Path) -> bool:
+        """Importa e valida. PVA permanece aberto com a escrituracao no banco.
+        NAO fecha o PVA — Fase 2 usa as escrituracoes ja importadas.
         """
-        logging.info(f"[PVA] Iniciando: {caminho.name}")
-
-        # 1. Abre PVA
-        if not self.abrir_pva():
-            logging.error("Nao foi possivel abrir o PVA")
-            return False
-
-        # 2. Fecha escrituracao anterior se houver
+        logging.info(f"[Fase1] {caminho.name}")
         self.fechar_escrituracao()
-
-        # 3. Importa o arquivo
+        if not self.abrir_pva():
+            logging.error("PVA nao encontrado")
+            return False
         if not self.importar_arquivo(caminho):
             logging.error(f"Falha ao importar: {caminho.name}")
             return False
-
-        # 4. Abre a escrituracao recem importada
         if not self.abrir_escrituracao_mais_recente():
             logging.error("Falha ao abrir escrituracao")
             return False
+        ok = self.validar()
+        if not ok:
+            logging.error(f"Falha na validacao: {caminho.name}")
+        self.fechar_escrituracao()
+        return ok
 
-        # 5. Valida
-        logging.info("Validando...")
-        if not self.validar():
-            logging.error("Falha na validacao")
+    # ── Fase 2: gerar + assinar + transmitir ─────────────────────────────────
+
+    def fase2_processar(self, index: int = 0) -> bool:
+        """Abre escrituracao pelo indice no PVA, gera, assina e transmite.
+        Pressupoe que a escrituracao ja esta importada no banco (Fase 1).
+        """
+        logging.info(f"[Fase2] posicao {index}")
+        self.fechar_escrituracao()
+        if not self.abrir_pva():
+            logging.error("PVA nao encontrado")
             return False
-
-        # 6. Gera arquivo de entrega
+        if not self.abrir_escrituracao_por_posicao(index):
+            logging.error(f"Falha ao abrir escrituracao posicao {index}")
+            return False
         logging.info("Gerando arquivo de entrega...")
         if not self.gerar_arquivo():
             logging.error("Falha ao gerar arquivo")
             return False
-
-        # 7. Assina
         logging.info("Assinando...")
         if not self.assinar():
             logging.error("Falha na assinatura")
             return False
-
-        # 8. Transmite
         logging.info("Transmitindo...")
         ok = self.transmitir()
         if not ok:
-            logging.error(f"Falha na transmissao: {caminho.name}")
-
+            logging.error(f"Falha na transmissao posicao {index}")
         self.fechar_escrituracao()
         return ok
-
-    # ── compat: mantém nomes antigos apontando para fluxo completo ───────────
-
-    def fase1_processar(self, caminho: Path) -> bool:
-        """Alias para processar_completo (fluxo unificado)."""
-        return self.processar_completo(caminho)

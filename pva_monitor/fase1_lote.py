@@ -120,11 +120,9 @@ def main():
         _salvar_resultado(log_json, resultados)
         print(f"  -> {status}")
 
-    # Fecha o PVA ao final — evita acumulo de estado e crash em execucoes longas
-    try:
-        pva.fechar_pva()
-    except Exception:
-        pass
+    # PVA permanece ABERTO com todas as escrituracoes no banco
+    # Execute pva_fase2.py em seguida para gerar + assinar + transmitir
+    logging.info("Fase 1 concluida — PVA mantido aberto para Fase 2")
 
     sep = "=" * 60
     ok_count  = sum(1 for r in resultados if r.get("status") == "OK")
