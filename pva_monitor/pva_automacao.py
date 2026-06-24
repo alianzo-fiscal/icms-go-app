@@ -13,6 +13,7 @@ import pyautogui
 import pyperclip
 import win32gui
 import win32con
+import win32process
 
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.3
@@ -51,21 +52,48 @@ def _encontrar_janela(titulo_parcial: str):
     return resultado[0] if resultado else None
 
 
+def _get_javaw_pids() -> set:
+    """Retorna conjunto de PIDs de processos javaw.exe ativos (PVA)."""
+    import subprocess as _sp2
+    try:
+        r = _sp2.run(
+            ["tasklist", "/FI", "IMAGENAME eq javaw.exe", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=5
+        )
+        pids = set()
+        for line in r.stdout.strip().splitlines():
+            parts = line.strip('"').split('","')
+            if len(parts) >= 2:
+                try:
+                    pids.add(int(parts[1]))
+                except ValueError:
+                    pass
+        return pids
+    except Exception:
+        return set()
+
+
 def _fechar_popups():
-    """Fecha qualquer popup Java pendente via Escape.
-    Escape e seguro para todos os dialogs PVA:
-    - 'Houve um erro ao ler a configuracao' (Ok unico) -> fecha
-    - 'Atencao - erro critico' (Nao Enviar / Enviar) -> escolhe Nao Enviar
-    - 'Verificacao concluida' (Ok) -> fecha
-    Nota: botoes Swing nao sao janelas Win32, EnumChildWindows nao os encontra.
+    """Fecha popups Java do PVA (javaw.exe) via Escape.
+    Filtra por processo para nao fechar janelas de outros aplicativos.
     """
+    javaw_pids = _get_javaw_pids()
     fechou = False
 
     def cb(hwnd, _):
         nonlocal fechou
         if not win32gui.IsWindowVisible(hwnd):
             return
+        # Verifica se a janela pertence ao processo PVA (javaw.exe)
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid not in javaw_pids:
+                return
+        except Exception:
+            return
         titulo = win32gui.GetWindowText(hwnd)
+        if not titulo:
+            return
         for t in _TITULOS_POPUP:
             if t.lower() in titulo.lower():
                 _attach_foreground(hwnd)
@@ -74,7 +102,7 @@ def _fechar_popups():
                     fechou = True
                     break
                 pyautogui.press("escape")
-                logging.info(f"fechou popup '{titulo}' via Escape")
+                logging.info(f"fechou popup PVA '{titulo}' via Escape")
                 fechou = True
                 time.sleep(0.6)
                 break
