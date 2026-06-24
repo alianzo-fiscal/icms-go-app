@@ -393,6 +393,22 @@ class PVAAutomacao:
         time.sleep(0.5)
         return True
 
+    def _garantir_tela_principal(self):
+        """Fecha escrituracao aberta (se houver) para retornar a tela principal do PVA.
+        Ctrl+F = Fechar Escrituracao no PVA.
+        Seguro chamar mesmo quando nenhuma escrituracao esta aberta.
+        """
+        hwnd = self._focar_pva()
+        if not hwnd:
+            return
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(1.5)
+        for _ in range(4):
+            if not _fechar_popups():
+                break
+            time.sleep(0.5)
+        time.sleep(0.5)
+
     def _batch_operacao(
         self,
         shortcut_keys: list,
@@ -400,14 +416,22 @@ class PVAAutomacao:
         timeout_chave: str,
         timeout_padrao: int,
         toolbar_btn_index: int = None,
+        fechar_antes: bool = True,
     ) -> bool:
         """Executa uma operacao em lote no PVA:
-        1. Envia atalho de teclado para abrir dialogo de selecao
+        0. Fecha escrituracao aberta para garantir estado limpo (tela principal)
+        1. Envia atalho de teclado para abrir dialogo de selecao em lote
         2. Se dialogo nao aparecer, tenta clicar no botao da toolbar (fallback)
         3. Seleciona todos os registros e confirma
-        4. Aguarda conclusao (timeout configuravel)
-        5. Fecha popups de resultado
+        4. Espera ativa: fecha popups de erro a cada 5s para nao bloquear PVA
+           (cada arquivo com erro gera um popup — fechar permite avançar ao proximo)
+        5. Ao final, retorna a tela principal fechando escrituracoes abertas
         """
+        # 0. Estado limpo antes de comecar
+        if fechar_antes:
+            logging.info(f"Garantindo tela principal antes de '{titulo_dialogo}'")
+            self._garantir_tela_principal()
+
         hwnd = self._focar_pva()
         if not hwnd:
             logging.error("_batch_operacao: PVA nao encontrado")
@@ -440,16 +464,38 @@ class PVAAutomacao:
         # 4. Seleciona todos e confirma
         self._confirmar_dialogo_batch(dlg)
 
-        # 5. Aguarda conclusao
+        # 5. Espera ativa: fecha popups a cada 5s para que o PVA avance entre arquivos
+        #    Arquivos com erro geram popup "Erro" — fechar permite processar o proximo
         timeout = self.cfg.get(timeout_chave, timeout_padrao)
-        logging.info(f"Aguardando conclusao de '{titulo_dialogo}' ({timeout}s)")
-        time.sleep(timeout)
+        logging.info(
+            f"Aguardando '{titulo_dialogo}' ({timeout}s) — "
+            "fechando popups de erro/resultado a cada 5s"
+        )
+        popups_fechados = 0
+        inicio_espera = time.time()
+        while time.time() - inicio_espera < timeout:
+            if _fechar_popups():
+                popups_fechados += 1
+                logging.info(
+                    f"Popup fechado durante '{titulo_dialogo}' "
+                    f"(total ate agora: {popups_fechados})"
+                )
+                # Apos fechar popup de erro, PVA pode ter aberto o arquivo
+                # para edicao — fecha para retornar ao estado batch
+                time.sleep(1.0)
+                self._garantir_tela_principal()
+                time.sleep(1.0)
+            else:
+                time.sleep(5)
 
-        # 6. Fecha popups de resultado (Informacao, Sucesso, Erro, etc.)
-        for _ in range(8):
-            if not _fechar_popups():
-                break
-            time.sleep(1.5)
+        if popups_fechados:
+            logging.warning(
+                f"'{titulo_dialogo}': {popups_fechados} popup(s) fechado(s) "
+                "(arquivos com erro foram ignorados)"
+            )
+
+        # 6. Garante retorno a tela principal ao final
+        self._garantir_tela_principal()
 
         return True
 
@@ -507,46 +553,4 @@ class PVAAutomacao:
     # ── Fase 1: importar + validar ──────────────────────────────────────────
 
     def fase1_processar(self, caminho: Path) -> bool:
-        """Importa e valida. PVA permanece aberto com a escrituracao ativa.
-        NAO fecha a escrituracao nem o PVA — Fase 2 usa diretamente.
-        """
-        logging.info(f"[Fase1] {caminho.name}")
-        _fechar_popups()
-        if not self.abrir_pva():
-            logging.error("PVA nao encontrado")
-            return False
-        logging.info("PVA aberto — iniciando importacao")
-        if not self.importar_arquivo(caminho):
-            logging.error(f"Falha ao importar: {caminho.name}")
-            return False
-        logging.info("Importacao concluida — abrindo escrituracao")
-        if not self.abrir_escrituracao_mais_recente():
-            logging.error("Falha ao abrir escrituracao")
-            return False
-        logging.info("Escrituracao aberta — iniciando validacao")
-        ok = self.validar()
-        logging.info(f"Validacao concluida: {'OK' if ok else 'ERRO'}")
-        # Escrituracao permanece aberta — Fase 2 usa ela diretamente
-        return ok
-
-    # ── Fase 2: gerar + assinar + transmitir ─────────────────────────────────
-
-    def fase2_processar(self, index: int = 0) -> bool:
-        """Abre escrituracao pelo indice no PVA, gera, assina e transmite.
-        Pressupoe que a escrituracao ja esta importada no banco (Fase 1).
-        """
-        logging.info(f"[Fase2] posicao {index}")
-        self.fechar_escrituracao()
-        if not self.abrir_pva():
-            logging.error("PVA nao encontrado")
-            return False
-        if not self.abrir_escrituracao_por_posicao(index):
-            logging.error(f"Falha ao abrir escrituracao posicao {index}")
-            return False
-        logging.info("Gerando arquivo de entrega...")
-        if not self.gerar_arquivo():
-            logging.error("Falha ao gerar arquivo")
-            return False
-        logging.info("Assinando...")
-        if not self.assinar():
-            logging.error("Falha 
+        """Imp
