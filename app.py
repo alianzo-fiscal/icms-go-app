@@ -639,140 +639,85 @@ with tab_sped:
 
     st.markdown("---")
 
-    # ── Fase 1: copia + importar + validar ───────────────────────────────────
-    st.markdown("### 2. Fase 1 — Importar e Validar no PVA")
-    st.caption("Copia os arquivos para a pasta monitorada e executa a validação no PVA automaticamente.")
+    # ── 2. Copiar arquivos para a pasta monitorada ────────────────────────────
+    st.markdown("### 2. Copiar Arquivos para a Pasta Monitorada")
+    st.caption("Copia os arquivos selecionados acima para a pasta que o PVA vai usar.")
 
-    _pode_fase1 = bool(uploaded_txts) or bool(_txts_na_pasta)
-    if not _pode_fase1:
+    _pode_copiar = bool(uploaded_txts)
+
+    if _pode_copiar and st.button("📋 Copiar arquivos para a pasta monitorada", key="btn_copiar"):
+        import os as _os
+        for _f in uploaded_txts:
+            _dest = _pasta_monitor / _f.name
+            _dest.write_bytes(_f.getvalue())
+        st.success(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
+
+    # Mostra arquivos prontos na pasta
+    _txts_prontos = list(_pasta_monitor.glob("*.txt"))
+    if _txts_prontos:
+        st.info(
+            f"📂 {len(_txts_prontos)} arquivo(s) na pasta monitorada: "
+            + ", ".join(t.name for t in _txts_prontos)
+        )
+        st.warning(
+            "✋ **Próximo passo:** abra o PVA e importe esses arquivos "
+            "clicando no botão ➕ (Importar Escrituração Fiscal). "
+            "Depois volte aqui e execute a automação abaixo."
+        )
+    elif not _pode_copiar:
         st.info("ℹ️ Faça upload de pelo menos um arquivo TXT para continuar.")
 
-    _forcar = st.checkbox("🔄 Forçar reprocessamento (ignorar histórico)", key="chk_forcar")
-
-    if _pode_fase1 and st.button("▶️ Executar Fase 1 (Importar + Validar)", type="primary", key="btn_fase1"):
-        import os as _os
-        # Copia arquivos do uploader para a pasta monitorada
-        if uploaded_txts:
-            for _f in uploaded_txts:
-                _dest = _pasta_monitor / _f.name
-                _dest.write_bytes(_f.getvalue())
-            st.write(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
-
-        # Se forçar reprocessamento, remove o json de histórico AGORA
-        if _forcar and _log_json_path.exists():
-            _log_json_path.unlink()
-            st.write("✔ Histórico limpo (reprocessamento forçado)")
-
-        _txts_prontos = list(_pasta_monitor.glob("*.txt"))
-        if not _txts_prontos:
-            st.error(f"❌ Nenhum arquivo .txt em `{_pasta_monitor}`. Faça upload primeiro.")
-        else:
-            st.write(f"✔ {len(_txts_prontos)} arquivo(s) prontos: " + ", ".join(t.name for t in _txts_prontos))
-            _script = Path(__file__).parent / "pva_monitor" / "fase1_lote.py"
-            _env = _os.environ.copy()
-            _env["PYTHONUNBUFFERED"] = "1"
-            _env["PYTHONUTF8"] = "1"
-            with st.spinner(f"PVA processando {len(_txts_prontos)} arquivo(s)... não interaja com o computador (pode levar minutos)."):
+    # ── limpar pasta monitorada ───────────────────────────────────────────────
+    with st.expander("🗑️ Limpar pasta monitorada"):
+        st.caption("Remove os .txt da pasta após já terem sido importados no PVA.")
+        if st.button("Limpar arquivos .txt da pasta", key="btn_limpar_pasta"):
+            _removidos = 0
+            for _arq in _pasta_monitor.glob("*.txt"):
                 try:
-                    _result = subprocess.run(
-                        [sys.executable, str(_script)],
-                        capture_output=True, text=True, encoding="utf-8",
-                        cwd=str(_script.parent),
-                        timeout=7200,  # 2 horas para lotes grandes
-                        env=_env,
-                    )
-                    _output = (_result.stdout or "") + (_result.stderr or "")
-                    if _result.returncode == 0:
-                        st.success("✅ Fase 1 concluída!")
-                    else:
-                        st.warning("⚠️ Fase 1 com erros.")
-                    st.code(_output or "(sem saída — verifique se o PVA está instalado)", language="text")
-                except subprocess.TimeoutExpired:
-                    st.error("❌ Timeout (10 min). PVA não respondeu.")
-                except Exception as _exc:
-                    st.error(f"❌ Erro: {_exc}")
+                    _arq.unlink()
+                    _removidos += 1
+                except Exception:
+                    pass
+            st.success(f"{_removidos} arquivo(s) removido(s).")
 
-    # ── limpar histórico ──────────────────────────────────────────────────────
+    # ── 3. Executar Automacao no PVA ──────────────────────────────────────────
     st.markdown("---")
-    with st.expander("🗑️ Limpar histórico de processamento"):
-        st.caption("Use para reprocessar arquivos que já estão no histórico.")
-        if st.button("Limpar resultado_validacao.json", key="btn_limpar"):
-            if _log_json_path.exists():
-                _log_json_path.unlink()
-                st.success("Histórico limpo. Recarregue a página.")
-            else:
-                st.info("Nenhum histórico encontrado.")
+    st.markdown("### 3. Executar Automação no PVA")
+    st.caption(
+        "Execute **após** importar os arquivos no PVA. "
+        "A automação irá: verificar pendências → gerar → assinar → transmitir em lote. "
+        "Não interaja com o computador enquanto o processo estiver rodando."
+    )
 
-    # ── resultado_validacao.json ───────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 3. Resultado da Validação")
-
-    if _log_json_path.exists():
-        try:
-            _resultados = _json.loads(_log_json_path.read_text(encoding="utf-8"))
-            import pandas as _pd
-            _df = _pd.DataFrame(_resultados)
-            if not _df.empty:
-                _ok   = _df[_df.get("status", _pd.Series()) == "OK"].shape[0] if "status" in _df else 0
-                _err  = _df[_df.get("status", _pd.Series()) == "ERRO"].shape[0] if "status" in _df else 0
-                _f2ok = _df[_df.get("fase2_ok", _pd.Series(dtype=bool)) == True].shape[0] if "fase2_ok" in _df else 0
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Validados OK", _ok)
-                col2.metric("Com Erro",     _err)
-                col3.metric("Transmitidos", _f2ok)
-                st.dataframe(_df, use_container_width=True)
-            else:
-                st.info("Nenhum resultado registrado ainda.")
-        except Exception as _exc:
-            st.warning(f"Erro ao ler resultado_validacao.json: {_exc}")
-    else:
-        st.info("Nenhum resultado ainda. Execute a Fase 1 primeiro.")
-
-    # ── Fase 2: gerar + assinar + transmitir ─────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 4. Fase 2 — Gerar, Assinar e Transmitir")
-    st.caption("Execute após a Fase 1. O PVA deve estar aberto com as escriturações validadas.")
-
-    _pendentes_f2 = []
-    if _log_json_path.exists():
-        try:
-            import json as _json3
-            _todos = _json3.loads(_log_json_path.read_text(encoding="utf-8"))
-            _pendentes_f2 = [r for r in _todos if r.get("status") == "OK" and not r.get("fase2_ok")]
-        except Exception:
-            pass
-
-    if _pendentes_f2:
-        st.info(f"📋 {len(_pendentes_f2)} arquivo(s) aguardando Fase 2: " +
-                ", ".join(r["arquivo"] for r in _pendentes_f2))
-    else:
-        st.caption("Nenhum arquivo pendente para Fase 2.")
-
-    if _pendentes_f2 and st.button("✍️ Executar Fase 2 (Gerar + Assinar + Transmitir)",
-                                    type="primary", key="btn_fase2"):
-        _script2 = Path(__file__).parent / "pva_monitor" / "pva_fase2.py"
-        import os as _os2
-        _env2 = _os2.environ.copy()
-        _env2["PYTHONUNBUFFERED"] = "1"
-        _env2["PYTHONUTF8"] = "1"
-        with st.spinner("Gerando, assinando e transmitindo... não interaja com o computador."):
+    if st.button(
+        "▶️ Validar → Gerar → Assinar → Transmitir",
+        type="primary",
+        key="btn_batch",
+    ):
+        _script_batch = Path(__file__).parent / "pva_monitor" / "pva_batch.py"
+        import os as _os_batch
+        _env_batch = _os_batch.environ.copy()
+        _env_batch["PYTHONUNBUFFERED"] = "1"
+        _env_batch["PYTHONUTF8"] = "1"
+        with st.spinner(
+            "Automação PVA em andamento... não interaja com o computador "
+            "(pode levar 30-60 min dependendo da quantidade de arquivos)."
+        ):
             try:
-                _result2 = subprocess.run(
-                    [sys.executable, str(_script2)],
-                    input="SIM\n",
+                _result_batch = subprocess.run(
+                    [sys.executable, str(_script_batch)],
                     capture_output=True, text=True, encoding="utf-8",
-                    cwd=str(_script2.parent),
-                    timeout=7200,
-                    env=_env2,
+                    cwd=str(_script_batch.parent),
+                    timeout=14400,  # 4 horas
+                    env=_env_batch,
                 )
-                _output2 = (_result2.stdout or "") + (_result2.stderr or "")
-                if _result2.returncode == 0:
-                    st.success("Fase 2 concluída!")
+                _output_batch = (_result_batch.stdout or "") + (_result_batch.stderr or "")
+                if _result_batch.returncode == 0:
+                    st.success("✅ Automação concluída com sucesso!")
                 else:
-                    st.warning("Fase 2 com erros.")
-                st.code(_output2 or "(sem saída)", language="text")
-                st.rerun()
+                    st.error("❌ Erro na automação. Verifique o log abaixo.")
+                st.code(_output_batch or "(sem saída)", language="text")
             except subprocess.TimeoutExpired:
-                st.error("Timeout (2h). PVA não respondeu.")
-            except Exception as _exc2:
-                st.error(f"Erro: {_exc2}")
+                st.error("❌ Timeout (4h). PVA não respondeu.")
+            except Exception as _exc_batch:
+                st.error(f"❌ Erro: {_exc_batch}")

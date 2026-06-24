@@ -173,39 +173,25 @@ class PVAAutomacao:
         _fechar_popups()
 
     def importar_arquivo(self, caminho: Path) -> bool:
-        """Clica em Escrituracao Fiscal > Importar via mouse (mesmo caminho do usuario manual).
-        Ctrl+I causa NullPointerException no PVA 6.0.3 (versoesModulos null no binding).
-        """
+        """Abre menu Escrituracao Fiscal > Importar, cola caminho e confirma."""
         hwnd = self._focar_pva()
         if not hwnd:
             logging.error("PVA nao encontrado para importar arquivo")
             return False
-
-        # Posicao da janela PVA na tela
-        rect = win32gui.GetWindowRect(hwnd)
-        win_x, win_y = rect[0], rect[1]
-
-        # Clica em "Escrituracao Fiscal" na barra de menu
-        # Menu bar fica ~35px abaixo do topo da janela; "Escrituracao Fiscal" ~80px da esquerda
-        menu_x = win_x + 80
-        menu_y = win_y + 35
-        pyautogui.click(menu_x, menu_y)
+        # Abre o menu via Alt para inicializar versoesModulos (Ctrl+I sozinho
+        # dispara o binding antes da inicializacao e causa NullPointerException)
+        pyautogui.press("alt")
         time.sleep(0.8)
-
-        # No menu aberto, navega ate "Importar" via tecla mnemonica "i"
-        pyautogui.press("i")
-        time.sleep(2.0)
-
-        # Dialogo de importacao aberto — cola caminho do arquivo via clipboard
-        pyperclip.copy(str(caminho))
-        pyautogui.hotkey("ctrl", "a")   # seleciona texto existente no campo
-        time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "v")   # cola o caminho
+        pyautogui.press("escape")   # fecha menu sem selecionar nada
         time.sleep(0.5)
-        pyautogui.press("enter")        # confirma
-
+        # Agora usa Ctrl+I — versoesModulos ja foi inicializado pelo menu
+        pyautogui.hotkey("ctrl", "i")
+        time.sleep(2.0)
+        pyperclip.copy(str(caminho))
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.5)
+        pyautogui.press("enter")
         timeout = self.cfg.get("aguardar_importacao_segundos", 90)
-        logging.info(f"Aguardando importacao ({timeout}s)")
         time.sleep(timeout)
         _fechar_popups()
         return True
@@ -323,6 +309,193 @@ class PVAAutomacao:
 
         time.sleep(1)
         logging.info("PVA fechado com sucesso")
+
+    # ── Utilitarios para operacoes em lote ──────────────────────────────────
+
+    def _aguardar_dialogo_pva(self, titulo_parcial: str, timeout: int = 20) -> int:
+        """Aguarda dialogo do PVA cujo titulo contem titulo_parcial.
+        Filtra por processo javaw.exe para evitar janelas de outros apps.
+        Retorna hwnd do dialogo ou 0 se timeout.
+        """
+        javaw_pids = _get_javaw_pids()
+        inicio = time.time()
+        while time.time() - inicio < timeout:
+            encontrado = [0]
+
+            def cb(hwnd, _):
+                if encontrado[0]:
+                    return
+                if not win32gui.IsWindowVisible(hwnd):
+                    return
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if pid not in javaw_pids:
+                        return
+                except Exception:
+                    return
+                t = win32gui.GetWindowText(hwnd)
+                if titulo_parcial.lower() in t.lower():
+                    encontrado[0] = hwnd
+
+            win32gui.EnumWindows(cb, None)
+            if encontrado[0]:
+                return encontrado[0]
+            time.sleep(0.5)
+        return 0
+
+    def _click_toolbar_btn(self, btn_index: int) -> bool:
+        """Clica no botao da toolbar principal do PVA pelo indice (0-based).
+        Posicoes estimadas: toolbar y≈55px do topo, botoes a partir de x≈14, espacamento≈27px.
+        """
+        hwnd = self._focar_pva()
+        if not hwnd:
+            return False
+        rect = win32gui.GetWindowRect(hwnd)
+        btn_x = rect[0] + 14 + btn_index * 27
+        btn_y = rect[1] + 55
+        pyautogui.click(btn_x, btn_y)
+        time.sleep(0.6)
+        return True
+
+    def _confirmar_dialogo_batch(self, dlg_hwnd: int) -> bool:
+        """Em dialogo de lista PVA (Verificar/Gerar/Assinar/Transmitir):
+        foca o dialogo, clica na tabela, seleciona tudo (Ctrl+A) e clica OK.
+        O botao OK fica em ~45% da largura e ~90% da altura do dialogo.
+        """
+        if not dlg_hwnd:
+            return False
+        _attach_foreground(dlg_hwnd)
+        time.sleep(0.6)
+
+        rect = win32gui.GetWindowRect(dlg_hwnd)
+        w = rect[2] - rect[0]
+        h = rect[3] - rect[1]
+
+        # Clica na area da tabela para dar foco a ela
+        pyautogui.click(rect[0] + w // 2, rect[1] + h // 2)
+        time.sleep(0.4)
+
+        # Seleciona todos os registros da tabela
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.5)
+
+        # Clica no botao OK (estimado: ~45% da largura, ~90% da altura)
+        ok_x = rect[0] + int(w * 0.45)
+        ok_y = rect[1] + int(h * 0.90)
+        logging.info(f"Clicando OK em ({ok_x}, {ok_y}) — dialogo {win32gui.GetWindowText(dlg_hwnd)}")
+        pyautogui.click(ok_x, ok_y)
+        time.sleep(0.5)
+        return True
+
+    def _batch_operacao(
+        self,
+        shortcut_keys: list,
+        titulo_dialogo: str,
+        timeout_chave: str,
+        timeout_padrao: int,
+        toolbar_btn_index: int = None,
+    ) -> bool:
+        """Executa uma operacao em lote no PVA:
+        1. Envia atalho de teclado para abrir dialogo de selecao
+        2. Se dialogo nao aparecer, tenta clicar no botao da toolbar (fallback)
+        3. Seleciona todos os registros e confirma
+        4. Aguarda conclusao (timeout configuravel)
+        5. Fecha popups de resultado
+        """
+        hwnd = self._focar_pva()
+        if not hwnd:
+            logging.error("_batch_operacao: PVA nao encontrado")
+            return False
+
+        # 1. Tenta via atalho de teclado
+        logging.info(f"Enviando atalho {'+'}.join(shortcut_keys): {shortcut_keys}")
+        pyautogui.hotkey(*shortcut_keys)
+        time.sleep(1.5)
+
+        # 2. Aguarda dialogo de selecao aparecer
+        dlg = self._aguardar_dialogo_pva(titulo_dialogo, timeout=20)
+
+        # 3. Fallback: clica no botao da toolbar
+        if not dlg and toolbar_btn_index is not None:
+            logging.info(
+                f"Dialogo '{titulo_dialogo}' nao detectado via atalho — "
+                f"tentando toolbar btn {toolbar_btn_index}"
+            )
+            self._click_toolbar_btn(toolbar_btn_index)
+            dlg = self._aguardar_dialogo_pva(titulo_dialogo, timeout=15)
+
+        if not dlg:
+            logging.error(
+                f"Nao foi possivel abrir dialogo '{titulo_dialogo}'. "
+                "Verifique se o PVA esta na tela principal (sem escrituracao aberta)."
+            )
+            return False
+
+        # 4. Seleciona todos e confirma
+        self._confirmar_dialogo_batch(dlg)
+
+        # 5. Aguarda conclusao
+        timeout = self.cfg.get(timeout_chave, timeout_padrao)
+        logging.info(f"Aguardando conclusao de '{titulo_dialogo}' ({timeout}s)")
+        time.sleep(timeout)
+
+        # 6. Fecha popups de resultado (Informacao, Sucesso, Erro, etc.)
+        for _ in range(8):
+            if not _fechar_popups():
+                break
+            time.sleep(1.5)
+
+        return True
+
+    # -- Operacoes batch (chamadas apos o usuario importar manualmente) --------
+
+    def batch_verificar_pendencias(self) -> bool:
+        """Verificar Pendencias em lote: Ctrl+V -> seleciona tudo -> OK.
+        Toolbar: botao 3 (indice 0-based) — icone checkmark verde.
+        """
+        return self._batch_operacao(
+            shortcut_keys=["ctrl", "v"],
+            titulo_dialogo="Pendencia",
+            timeout_chave="aguardar_validacao_segundos",
+            timeout_padrao=600,
+            toolbar_btn_index=3,
+        )
+
+    def batch_gerar_arquivo(self) -> bool:
+        """Gerar Arquivo em lote: Ctrl+G -> seleciona tudo -> OK.
+        Toolbar: botao 4 — icone seta verde com documento.
+        """
+        return self._batch_operacao(
+            shortcut_keys=["ctrl", "g"],
+            titulo_dialogo="Gerar",
+            timeout_chave="aguardar_geracao_segundos",
+            timeout_padrao=900,
+            toolbar_btn_index=4,
+        )
+
+    def batch_assinar(self) -> bool:
+        """Assinar em lote: Ctrl+S -> seleciona tudo -> OK.
+        Toolbar: botao 5 — icone caneta/edit.
+        """
+        return self._batch_operacao(
+            shortcut_keys=["ctrl", "s"],
+            titulo_dialogo="Assinar",
+            timeout_chave="aguardar_assinatura_segundos",
+            timeout_padrao=300,
+            toolbar_btn_index=5,
+        )
+
+    def batch_transmitir(self) -> bool:
+        """Transmitir em lote: Ctrl+T -> seleciona tudo -> OK.
+        Toolbar: botao 7 — icone globo.
+        """
+        return self._batch_operacao(
+            shortcut_keys=["ctrl", "t"],
+            titulo_dialogo="Transmit",
+            timeout_chave="aguardar_transmissao_segundos",
+            timeout_padrao=900,
+            toolbar_btn_index=7,
+        )
 
     # ── Fase 1: importar + validar ──────────────────────────────────────────
 
