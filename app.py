@@ -800,7 +800,25 @@ elif _pagina == "📜 Certidões":
         col_a, col_b = st.columns(2)
         col_a.metric("CNPJ Matriz", _cnpj)
         col_b.metric("Inscrição Estadual (Matriz)", _ie or "—")
-        st.caption("Copie o CNPJ/IE acima e cole no site quando solicitado.")
+        import streamlit.components.v1 as _comp_clip
+        import json as _jc
+        _comp_clip.html(
+            "<!DOCTYPE html><html><body style='margin:0'>"
+            "<button id='cb' style='padding:8px 20px;background:#0068c9;color:white;"
+            "border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer'>"
+            "&#128203; Copiar CNPJ</button>"
+            "<script>"
+            "var cnpj=" + _jc.dumps(_cnpj) + ";"
+            "document.getElementById('cb').addEventListener('click',function(){"
+            "  navigator.clipboard.writeText(cnpj).then(function(){"
+            "    document.getElementById('cb').textContent='✅ Copiado!';"
+            "    setTimeout(function(){document.getElementById('cb').textContent='📋 Copiar CNPJ';},2000);"
+            "  });"
+            "});"
+            "</script></body></html>",
+            height=48, scrolling=False,
+        )
+        st.caption("Copie o CNPJ acima e cole no site quando solicitado.")
     else:
         st.warning("⚠️ CNPJ não cadastrado. Atualize o dicionário EMPRESAS no app.py.")
 
