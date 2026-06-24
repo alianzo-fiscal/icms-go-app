@@ -22,6 +22,7 @@ ARQUIVOS = [
     ".streamlit/config.toml",
     "pva_monitor/pva_automacao.py",
     "pva_monitor/pva_batch.py",
+    "pva_monitor/certidoes_bot.py",
     "pva_monitor/fase1_lote.py",
     "pva_monitor/pva_fase2.py",
     "pva_monitor/fase1_lote.bat",

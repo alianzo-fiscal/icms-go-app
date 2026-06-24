@@ -844,42 +844,34 @@ elif _pagina == "📜 Certidões":
             unsafe_allow_html=True,
         )
 
-    # ── Botão "Abrir todas" ───────────────────────────────────────────────────
-    _todas_urls = [
-        "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj",
-        "https://consulta-crf.caixa.gov.br/consultacrf/",
-        "https://cndt-certidao.tst.jus.br/inicio.faces",
-        "https://www.sefaz.go.gov.br/certidao/emissao/",
-    ]
-    if _url_mun:
-        _todas_urls.append(_url_mun)
-
-    import json as _json_cert
-    import streamlit.components.v1 as _comp
-    _urls_js = _json_cert.dumps(_todas_urls)
-    _n = len(_todas_urls)
-    _comp.html(
-        f"""<!DOCTYPE html>
-<html><body style="margin:0;padding:0">
-<button id="btn" style="width:100%;padding:14px 0;background:#1f3864;color:white;
-  border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer">
-  &#128640; Abrir todas as certid&otilde;es ({_n})
-</button>
-<p style="font-size:11px;color:#888;margin:6px 0 0 2px">
-  Se o browser bloquear popups, clique em &ldquo;Permitir&rdquo; na barra de endere&ccedil;o.
-</p>
-<script>
-document.getElementById('btn').addEventListener('click', function() {{
-  var urls = {_urls_js};
-  urls.forEach(function(u, i) {{
-    setTimeout(function() {{ window.open(u, '_blank'); }}, i * 400);
-  }});
-}});
-</script>
-</body></html>""",
-        height=80,
-        scrolling=False,
+    # ── Emissão Automática ───────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🚀 Emissão Automática")
+    st.caption(
+        "Preenche o CNPJ automaticamente nos sites federais (RFB, FGTS, TST) "
+        "e abre SEFAZ-GO e Municipal para preenchimento manual. "
+        "Requer Playwright instalado."
     )
+    _script_cert = Path(__file__).parent / "pva_monitor" / "certidoes_bot.py"
+    _ie_emp = _dados_emp.get("ie_matriz", "")
+    if st.button("🚀 Emitir todas as certidões", type="primary",
+                 key="btn_cert_auto", disabled=not bool(_cnpj)):
+        with st.spinner("Abrindo browser e preenchendo certidões..."):
+            try:
+                _cmd_cert = [
+                    sys.executable, str(_script_cert),
+                    "--cnpj", _cnpj,
+                    "--ie",   _ie_emp,
+                    "--url_municipal", _url_mun or "",
+                ]
+                import subprocess as _sp_cert
+                _sp_cert.Popen(_cmd_cert, cwd=str(_script_cert.parent))
+                _ie_show = _ie_emp if _ie_emp else "—"
+                st.success("\u2705 Browser aberto! Conclua os sites manuais (SEFAZ-GO e Municipal).")
+                st.info("**CNPJ:** " + _cnpj + "  |  **IE:** " + _ie_show)
+            except Exception as _exc_cert:
+                st.error("\u274c Erro: " + str(_exc_cert))
+                st.code("pip install playwright && playwright install chromium", language="bash")
     st.markdown("---")
 
     st.subheader("🏛️ Certidões Federais")
