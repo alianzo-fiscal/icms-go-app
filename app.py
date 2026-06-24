@@ -837,26 +837,15 @@ elif _pagina == "📜 Certidões":
         _todas_urls.append(_url_mun)
 
     import json as _json_cert
-    import streamlit.components.v1 as _comp
     _urls_js = _json_cert.dumps(_todas_urls)
-    _comp.html(
-        f"""
-        <button onclick="
-          var urls = {_urls_js};
-          urls.forEach(function(u, i) {{
-            setTimeout(function() {{ window.top.open(u, '_blank'); }}, i * 300);
-          }});
-        " style="
-          padding:10px 28px;background:#1f3864;color:white;border:none;
-          border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;
-        ">🚀 Abrir todas as certidões ({len(_todas_urls)})</button>
-        <p style="font-size:11px;color:#888;margin-top:6px">
-          Se o browser bloquear popups, clique em "Permitir" na barra de endereço.
-        </p>
-        """,
-        height=70,
+    _n = len(_todas_urls)
+    st.markdown(
+        f'<button onclick="var u={_urls_js};u.forEach(function(h,i){{setTimeout(function(){{window.open(h,\'_blank\')}},i*400)}})" ' +
+        'style="padding:10px 28px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer">' +
+        f'🚀 Abrir todas as certidões ({_n})</button>' +
+        '<p style="font-size:11px;color:#888;margin-top:6px">Se o browser bloquear popups, clique em &ldquo;Permitir&rdquo; na barra de endereço.</p>',
+        unsafe_allow_html=True,
     )
-
     st.markdown("---")
 
     st.subheader("🏛️ Certidões Federais")
