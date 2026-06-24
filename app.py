@@ -787,4 +787,7 @@ elif _pagina == "📜 Certidões":
     if _url_mun:
         _btn_link(f"Certidão Municipal — {_municipio}", _url_mun)
     else:
-        
+        st.info(
+            f"URL da certidão municipal de {_municipio or _empresa} não cadastrada. "
+            "Atualize o dicionário EMPRESAS no app.py."
+        )
