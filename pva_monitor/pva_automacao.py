@@ -382,8 +382,14 @@ class PVAAutomacao:
         # Clica no botao OK (estimado: ~45% da largura, ~90% da altura)
         ok_x = rect[0] + int(w * 0.45)
         ok_y = rect[1] + int(h * 0.90)
-        logging.info(f"Clicando OK em ({ok_x}, {ok_y}) — dialogo {win32gui.GetWindowText(dlg_hwnd)}")
+        logging.info(
+            f"Clicando OK em ({ok_x}, {ok_y}) rect={rect} "
+            f"dialogo='{win32gui.GetWindowText(dlg_hwnd)}'"
+        )
         pyautogui.click(ok_x, ok_y)
+        time.sleep(0.4)
+        # Fallback: Enter aciona o botao default do dialogo caso o click tenha errado
+        pyautogui.press("enter")
         time.sleep(0.5)
         return True
 
@@ -408,7 +414,7 @@ class PVAAutomacao:
             return False
 
         # 1. Tenta via atalho de teclado
-        logging.info(f"Enviando atalho {'+'}.join(shortcut_keys): {shortcut_keys}")
+        logging.info(f"Enviando atalho {'+'.join(shortcut_keys)}")
         pyautogui.hotkey(*shortcut_keys)
         time.sleep(1.5)
 
@@ -452,10 +458,11 @@ class PVAAutomacao:
     def batch_verificar_pendencias(self) -> bool:
         """Verificar Pendencias em lote: Ctrl+V -> seleciona tudo -> OK.
         Toolbar: botao 3 (indice 0-based) — icone checkmark verde.
+        Busca por 'Verificar' (sem acento) para evitar mismatch de encoding.
         """
         return self._batch_operacao(
             shortcut_keys=["ctrl", "v"],
-            titulo_dialogo="Pendencia",
+            titulo_dialogo="Verificar",
             timeout_chave="aguardar_validacao_segundos",
             timeout_padrao=600,
             toolbar_btn_index=3,
@@ -542,11 +549,4 @@ class PVAAutomacao:
             return False
         logging.info("Assinando...")
         if not self.assinar():
-            logging.error("Falha na assinatura")
-            return False
-        logging.info("Transmitindo...")
-        ok = self.transmitir()
-        if not ok:
-            logging.error(f"Falha na transmissao posicao {index}")
-        self.fechar_escrituracao()
-        return ok
+            logging.error("Falha 
