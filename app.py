@@ -51,6 +51,7 @@ if not st.session_state.get("autenticado"):
     st.stop()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 _EMP_LABELS = {
     "EDN":      "Empresa 1 — EDN",
     "Atacadão": "Empresa 2 — Atacadão",
@@ -59,78 +60,36 @@ _EMP_LABELS = {
     "Goyaço":   "Empresa 5 — Goyaço",
 }
 
+EMPRESAS: dict = {
+    "EDN":      {"nome_completo": "EDN Utilidades Domésticas Importação", "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "Atacadão": {"nome_completo": "Atacadão",  "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "Cristal":  {"nome_completo": "Cristal",   "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "R3":       {"nome_completo": "R3",         "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "Goyaço":   {"nome_completo": "Goyaço",    "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+}
+
 with st.sidebar:
     st.markdown("## 📊 ICMS/GO")
     st.markdown("Plataforma de Análise Tributária")
     st.markdown("---")
-
-    # ── Seletor de empresa ────────────────────────────────────────────────────
     st.markdown("**🏢 Empresa**")
     empresa_ativa = st.selectbox(
-        "empresa_sel",
-        list(_EMP_LABELS.keys()),
+        "empresa_sel", list(_EMP_LABELS.keys()),
         format_func=lambda x: _EMP_LABELS[x],
-        key="empresa_sel",
-        label_visibility="collapsed",
+        key="empresa_sel", label_visibility="collapsed",
     )
-
     st.markdown("---")
-
-    # ── Navegação ─────────────────────────────────────────────────────────────
     st.markdown("**🗂️ Menu**")
     pagina_ativa = st.radio(
         "nav_pagina",
         ["📊 Análise Fiscal", "🧮 Apuração Mensal", "📂 SPED / PVA", "📜 Certidões"],
-        key="nav_pagina",
-        label_visibility="collapsed",
+        key="nav_pagina", label_visibility="collapsed",
     )
-
     st.markdown("---")
     st.caption("⚠️ Arquivos processados em memória — não armazenados no servidor.")
     if st.button("🚪 Sair", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
-
-# ── Dados das Empresas ────────────────────────────────────────────────────────
-# CNPJ e município serão preenchidos após envio da planilha de filiais.
-# url_certidao_municipal: URL direta do site da prefeitura para emissão de CND.
-EMPRESAS: dict = {
-    "EDN": {
-        "nome_completo"          : "EDN Utilidades Domésticas Importação",
-        "cnpj_matriz"            : "",   # a preencher
-        "municipio_sede"         : "",   # a preencher
-        "url_certidao_municipal" : "",   # a preencher
-        "perfil_tributario"      : "",   # particularidades fiscais — a preencher
-    },
-    "Atacadão": {
-        "nome_completo"          : "Atacadão",
-        "cnpj_matriz"            : "",
-        "municipio_sede"         : "",
-        "url_certidao_municipal" : "",
-        "perfil_tributario"      : "",
-    },
-    "Cristal": {
-        "nome_completo"          : "Cristal",
-        "cnpj_matriz"            : "",
-        "municipio_sede"         : "",
-        "url_certidao_municipal" : "",
-        "perfil_tributario"      : "",
-    },
-    "R3": {
-        "nome_completo"          : "R3",
-        "cnpj_matriz"            : "",
-        "municipio_sede"         : "",
-        "url_certidao_municipal" : "",
-        "perfil_tributario"      : "",
-    },
-    "Goyaço": {
-        "nome_completo"          : "Goyaço",
-        "cnpj_matriz"            : "",
-        "municipio_sede"         : "",
-        "url_certidao_municipal" : "",
-        "perfil_tributario"      : "",
-    },
-}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 SCRIPTS_DIR = Path(__file__).parent
@@ -341,14 +300,13 @@ def processar_apuracao(ent_files, sai_files):
 
 
 # ── Layout principal ───────────────────────────────────────────────────────────
-_empresa  = st.session_state.get("empresa_sel", "EDN")
-_pagina   = st.session_state.get("nav_pagina",  "📊 Análise Fiscal")
+_empresa   = st.session_state.get("empresa_sel", "EDN")
+_pagina    = st.session_state.get("nav_pagina",  "📊 Análise Fiscal")
 _dados_emp = EMPRESAS.get(_empresa, EMPRESAS["EDN"])
 
 st.title(f"📊 {_empresa} — ICMS/GO")
 st.caption(_dados_emp["nome_completo"] or _empresa)
 st.markdown("---")
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PÁGINA: Análise Fiscal
@@ -358,196 +316,205 @@ if _pagina == "📊 Análise Fiscal":
 
     # ── Entradas ──────────────────────────────────────────────────────────────
     with tab_ent:
-    st.header("Análise de Entradas — ICMS/GO")
-    st.markdown(
-        """
-Analisa as notas fiscais de **entrada** e identifica divergências de ICMS, como:
-- **DIV-1** Importada com alíquota diferente de 4% (Resolução Senado 13/2012)
-- **DIV-2** CST 41 interestadual — solicitar documentação do convênio
-- **DIV-3** CST 90 interestadual — verificar natureza da operação
-- **DIV-4** Base de cálculo reduzida sem CST 20
-- **DIV-5** Alíquota 4% + origem nacional (Res. 13/2012)
+        st.header("Análise de Entradas — ICMS/GO")
+        st.markdown(
+            """
+    Analisa as notas fiscais de **entrada** e identifica divergências de ICMS, como:
+    - **DIV-1** Importada com alíquota diferente de 4% (Resolução Senado 13/2012)
+    - **DIV-2** CST 41 interestadual — solicitar documentação do convênio
+    - **DIV-3** CST 90 interestadual — verificar natureza da operação
+    - **DIV-4** Base de cálculo reduzida sem CST 20
+    - **DIV-5** Alíquota 4% + origem nacional (Res. 13/2012)
 
-Gera relatório **Excel** (abas por divergência) + relatório **Word** (análise narrativa).
-"""
-    )
+    Gera relatório **Excel** (abas por divergência) + relatório **Word** (análise narrativa).
+    """
+        )
 
-    st.divider()
+        st.divider()
 
-    uploaded_ent = st.file_uploader(
-        "Selecione os arquivos de **Entradas** (XLS / XLSX / CSV)",
-        type=["xls", "xlsx", "csv"],
-        accept_multiple_files=True,
-        key="uploader_entradas",
-        help="Você pode selecionar múltiplos arquivos de uma vez.",
-    )
+        uploaded_ent = st.file_uploader(
+            "Selecione os arquivos de **Entradas** (XLS / XLSX / CSV)",
+            type=["xls", "xlsx", "csv"],
+            accept_multiple_files=True,
+            key="uploader_entradas",
+            help="Você pode selecionar múltiplos arquivos de uma vez.",
+        )
 
-    if uploaded_ent:
-        st.info(f"📎 {len(uploaded_ent)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_ent))
+        if uploaded_ent:
+            st.info(f"📎 {len(uploaded_ent)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_ent))
 
-    if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
-        try:
-            with st.spinner("Processando arquivos de entradas... Aguarde."):
-                (
-                    excel_bytes,
-                    word_bytes,
-                    periodo,
-                    contagens,
-                    total_registros,
-                    total_inter,
-                    nome_base,
-                ) = processar_entradas(uploaded_ent)
+        if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
+            try:
+                with st.spinner("Processando arquivos de entradas... Aguarde."):
+                    (
+                        excel_bytes,
+                        word_bytes,
+                        periodo,
+                        contagens,
+                        total_registros,
+                        total_inter,
+                        nome_base,
+                    ) = processar_entradas(uploaded_ent)
 
-            st.success(f"✅ Análise concluída — Período: **{periodo}**")
+                st.success(f"✅ Análise concluída — Período: **{periodo}**")
 
-            # Métricas resumo
-            total_divs = sum(contagens.values())
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total de Registros", f"{total_registros:,}")
-            col2.metric("Operações Interestaduais", f"{total_inter:,}")
-            col3.metric("Total de Divergências", f"{total_divs:,}")
-            col4.metric("Período", periodo)
+                # Métricas resumo
+                total_divs = sum(contagens.values())
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Total de Registros", f"{total_registros:,}")
+                col2.metric("Operações Interestaduais", f"{total_inter:,}")
+                col3.metric("Total de Divergências", f"{total_divs:,}")
+                col4.metric("Período", periodo)
 
-            # Detalhamento por divergência
-            if total_divs > 0:
-                st.markdown("#### Divergências encontradas")
-                desc_divs = {
-                    "DIV1": "Importada — alíquota ≠ 4%",
-                    "DIV2": "CST 41 interestadual",
-                    "DIV3": "CST 90 interestadual",
-                    "DIV4": "Base reduzida sem CST 20",
-                    "DIV5": "Alíq 4% + origem nacional",
-                }
-                cols = st.columns(len(contagens))
-                for i, (k, v) in enumerate(contagens.items()):
-                    cols[i].metric(
-                        label=f"{k} — {desc_divs.get(k, k)}",
-                        value=v,
-                        delta="registros",
-                        delta_color="off",
+                # Detalhamento por divergência
+                if total_divs > 0:
+                    st.markdown("#### Divergências encontradas")
+                    desc_divs = {
+                        "DIV1": "Importada — alíquota ≠ 4%",
+                        "DIV2": "CST 41 interestadual",
+                        "DIV3": "CST 90 interestadual",
+                        "DIV4": "Base reduzida sem CST 20",
+                        "DIV5": "Alíq 4% + origem nacional",
+                    }
+                    cols = st.columns(len(contagens))
+                    for i, (k, v) in enumerate(contagens.items()):
+                        cols[i].metric(
+                            label=f"{k} — {desc_divs.get(k, k)}",
+                            value=v,
+                            delta="registros",
+                            delta_color="off",
+                        )
+                else:
+                    st.info("Nenhuma divergência encontrada nos arquivos.")
+
+                st.divider()
+                st.markdown("#### 📥 Baixar Relatórios")
+                col_dl1, col_dl2 = st.columns(2)
+                with col_dl1:
+                    st.download_button(
+                        label="⬇️  Baixar Excel (.xlsx)",
+                        data=excel_bytes,
+                        file_name=f"{nome_base}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
                     )
-            else:
-                st.info("Nenhuma divergência encontrada nos arquivos.")
+                with col_dl2:
+                    st.download_button(
+                        label="⬇️  Baixar Word (.docx)",
+                        data=word_bytes,
+                        file_name=f"{nome_base}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                    )
 
-            st.divider()
-            st.markdown("#### 📥 Baixar Relatórios")
-            col_dl1, col_dl2 = st.columns(2)
-            with col_dl1:
-                st.download_button(
-                    label="⬇️  Baixar Excel (.xlsx)",
-                    data=excel_bytes,
-                    file_name=f"{nome_base}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
-            with col_dl2:
-                st.download_button(
-                    label="⬇️  Baixar Word (.docx)",
-                    data=word_bytes,
-                    file_name=f"{nome_base}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                )
+            except Exception as exc:
+                st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
-        except Exception as exc:
-            st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # TAB 2 — SAÍDAS
+    # ────────────────────────────────────────────────────────────────────────────
 
     # ── Saídas ────────────────────────────────────────────────────────────────
     with tab_sai:
-    st.header("Análise de Saídas — ICMS/GO")
-    st.markdown(
-        """
-Analisa as notas fiscais de **saída** e identifica divergências de ICMS, como:
-- **DIV-1** Alíquota 21% — atípica (verificar NCM cosméticos)
-- **DIV-2** Alíquota 12% intraestadual com CST 00
-- **DIV-3** Base reduzida com CST 00 (deveria ser CST 20)
-- **DIV-4** CST 20 — verificar percentual de redução e estorno de crédito
-- **DIV-5** CST 90 — verificar tributação pendente
-- **DIV-6** CFOP 6xxx + alíquota 4% + origem nacional
-- **DIV-7** CST 40/41 — confirmar convênio CONFAZ
+        st.header("Análise de Saídas — ICMS/GO")
+        st.markdown(
+            """
+    Analisa as notas fiscais de **saída** e identifica divergências de ICMS, como:
+    - **DIV-1** Alíquota 21% — atípica (verificar NCM cosméticos)
+    - **DIV-2** Alíquota 12% intraestadual com CST 00
+    - **DIV-3** Base reduzida com CST 00 (deveria ser CST 20)
+    - **DIV-4** CST 20 — verificar percentual de redução e estorno de crédito
+    - **DIV-5** CST 90 — verificar tributação pendente
+    - **DIV-6** CFOP 6xxx + alíquota 4% + origem nacional
+    - **DIV-7** CST 40/41 — confirmar convênio CONFAZ
 
-Gera relatório **Excel** (Resumo + Base Consolidada + abas por divergência) + relatório **Word**.
-"""
-    )
+    Gera relatório **Excel** (Resumo + Base Consolidada + abas por divergência) + relatório **Word**.
+    """
+        )
 
-    st.divider()
+        st.divider()
 
-    uploaded_sai = st.file_uploader(
-        "Selecione os arquivos de **Saídas** (XLS / XLSX / CSV)",
-        type=["xls", "xlsx", "csv"],
-        accept_multiple_files=True,
-        key="uploader_saidas",
-        help="Você pode selecionar múltiplos arquivos de uma vez.",
-    )
+        uploaded_sai = st.file_uploader(
+            "Selecione os arquivos de **Saídas** (XLS / XLSX / CSV)",
+            type=["xls", "xlsx", "csv"],
+            accept_multiple_files=True,
+            key="uploader_saidas",
+            help="Você pode selecionar múltiplos arquivos de uma vez.",
+        )
 
-    if uploaded_sai:
-        st.info(f"📎 {len(uploaded_sai)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_sai))
+        if uploaded_sai:
+            st.info(f"📎 {len(uploaded_sai)} arquivo(s) selecionado(s): " + ", ".join(f.name for f in uploaded_sai))
 
-    if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
-        try:
-            with st.spinner("Processando arquivos de saídas... Aguarde."):
-                (
-                    excel_bytes,
-                    word_bytes,
-                    periodo,
-                    contagens,
-                    total_registros,
-                    nome_base,
-                ) = processar_saidas(uploaded_sai)
+        if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
+            try:
+                with st.spinner("Processando arquivos de saídas... Aguarde."):
+                    (
+                        excel_bytes,
+                        word_bytes,
+                        periodo,
+                        contagens,
+                        total_registros,
+                        nome_base,
+                    ) = processar_saidas(uploaded_sai)
 
-            st.success(f"✅ Análise concluída — Período: **{periodo}**")
+                st.success(f"✅ Análise concluída — Período: **{periodo}**")
 
-            total_divs = sum(contagens.values())
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total de Registros", f"{total_registros:,}")
-            col2.metric("Total de Divergências", f"{total_divs:,}")
-            col3.metric("Período", periodo)
+                total_divs = sum(contagens.values())
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total de Registros", f"{total_registros:,}")
+                col2.metric("Total de Divergências", f"{total_divs:,}")
+                col3.metric("Período", periodo)
 
-            if total_divs > 0:
-                st.markdown("#### Divergências encontradas")
-                desc_divs = {
-                    "DIV1": "Alíq 21% — atípica",
-                    "DIV2": "Alíq 12% intra + CST 00",
-                    "DIV3": "Base reduzida sem CST 20",
-                    "DIV4": "CST 20 — verificar redução",
-                    "DIV5": "CST 90 — tributação pendente",
-                    "DIV6": "CFOP 6xxx + 4% + nacional",
-                    "DIV7": "CST 40/41 — verificar convênio",
-                }
-                cols = st.columns(min(len(contagens), 4))
-                for i, (k, v) in enumerate(contagens.items()):
-                    cols[i % 4].metric(
-                        label=f"{k} — {desc_divs.get(k, k)}",
-                        value=v,
-                        delta="registros",
-                        delta_color="off",
+                if total_divs > 0:
+                    st.markdown("#### Divergências encontradas")
+                    desc_divs = {
+                        "DIV1": "Alíq 21% — atípica",
+                        "DIV2": "Alíq 12% intra + CST 00",
+                        "DIV3": "Base reduzida sem CST 20",
+                        "DIV4": "CST 20 — verificar redução",
+                        "DIV5": "CST 90 — tributação pendente",
+                        "DIV6": "CFOP 6xxx + 4% + nacional",
+                        "DIV7": "CST 40/41 — verificar convênio",
+                    }
+                    cols = st.columns(min(len(contagens), 4))
+                    for i, (k, v) in enumerate(contagens.items()):
+                        cols[i % 4].metric(
+                            label=f"{k} — {desc_divs.get(k, k)}",
+                            value=v,
+                            delta="registros",
+                            delta_color="off",
+                        )
+                else:
+                    st.info("Nenhuma divergência encontrada nos arquivos.")
+
+                st.divider()
+                st.markdown("#### 📥 Baixar Relatórios")
+                col_dl1, col_dl2 = st.columns(2)
+                with col_dl1:
+                    st.download_button(
+                        label="⬇️  Baixar Excel (.xlsx)",
+                        data=excel_bytes,
+                        file_name=f"{nome_base}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
                     )
-            else:
-                st.info("Nenhuma divergência encontrada nos arquivos.")
+                with col_dl2:
+                    st.download_button(
+                        label="⬇️  Baixar Word (.docx)",
+                        data=word_bytes,
+                        file_name=f"{nome_base}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                    )
 
-            st.divider()
-            st.markdown("#### 📥 Baixar Relatórios")
-            col_dl1, col_dl2 = st.columns(2)
-            with col_dl1:
-                st.download_button(
-                    label="⬇️  Baixar Excel (.xlsx)",
-                    data=excel_bytes,
-                    file_name=f"{nome_base}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
-            with col_dl2:
-                st.download_button(
-                    label="⬇️  Baixar Word (.docx)",
-                    data=word_bytes,
-                    file_name=f"{nome_base}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                )
+            except Exception as exc:
+                st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
-        except Exception as exc:
-            st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
+    # ────────────────────────────────────────────────────────────────────────────
+    # TAB 3 — APURAÇÃO MENSAL
+    # ────────────────────────────────────────────────────────────────────────────
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PÁGINA: Apuração Mensal
@@ -632,6 +599,10 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
         except Exception as exc:
             st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
+# ────────────────────────────────────────────────────────────────────────────
+# TAB 4 — SPED / PVA
+# ────────────────────────────
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PÁGINA: SPED / PVA
 # ══════════════════════════════════════════════════════════════════════════════
@@ -712,4 +683,117 @@ elif _pagina == "📂 SPED / PVA":
 
     # ── limpar pasta monitorada ───────────────────────────────────────────────
     with st.expander("🗑️ Limpar pasta monitorada"):
-        st.
+        st.caption("Remove os .txt da pasta após já terem sido importados no PVA.")
+        if st.button("Limpar arquivos .txt da pasta", key="btn_limpar_pasta"):
+            _removidos = 0
+            for _arq in _pasta_monitor.glob("*.txt"):
+                try:
+                    _arq.unlink()
+                    _removidos += 1
+                except Exception:
+                    pass
+            st.success(f"{_removidos} arquivo(s) removido(s).")
+
+    # ── 3. Executar Automacao no PVA ──────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 3. Executar Automação no PVA")
+    st.caption(
+        "Execute **após** importar os arquivos no PVA. "
+        "A automação irá: verificar pendências → gerar → assinar → transmitir em lote. "
+        "Não interaja com o computador enquanto o processo estiver rodando."
+    )
+
+    if st.button(
+        "▶️ Validar → Gerar → Assinar → Transmitir",
+        type="primary",
+        key="btn_batch",
+    ):
+        _script_batch = Path(__file__).parent / "pva_monitor" / "pva_batch.py"
+        import os as _os_batch
+        _env_batch = _os_batch.environ.copy()
+        _env_batch["PYTHONUNBUFFERED"] = "1"
+        _env_batch["PYTHONUTF8"] = "1"
+        with st.spinner(
+            "Automação PVA em andamento... não interaja com o computador "
+            "(pode levar 30-60 min dependendo da quantidade de arquivos)."
+        ):
+            try:
+                _result_batch = subprocess.run(
+                    [sys.executable, str(_script_batch)],
+                    capture_output=True, text=True, encoding="utf-8",
+                    cwd=str(_script_batch.parent),
+                    timeout=14400,  # 4 horas
+                    env=_env_batch,
+                )
+                _output_batch = (_result_batch.stdout or "") + (_result_batch.stderr or "")
+                if _result_batch.returncode == 0:
+                    st.success("✅ Automação concluída com sucesso!")
+                else:
+                    st.error("❌ Erro na automação. Verifique o log abaixo.")
+                st.code(_output_batch or "(sem saída)", language="text")
+            except subprocess.TimeoutExpired:
+                st.error("❌ Timeout (4h). PVA não respondeu.")
+            except Exception as _exc_batch:
+                st.error(f"❌ Erro: {_exc_batch}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: Certidões
+# ══════════════════════════════════════════════════════════════════════════════
+elif _pagina == "📜 Certidões":
+    st.header(f"📜 Certidões — {_empresa}")
+
+    _cnpj = _dados_emp.get("cnpj_matriz", "")
+    if _cnpj:
+        st.info(f"**CNPJ Matriz:** {_cnpj}")
+        st.caption("Copie o CNPJ acima e cole no site quando solicitado.")
+    else:
+        st.warning("⚠️ CNPJ não cadastrado. Atualize o dicionário EMPRESAS no app.py.")
+
+    st.markdown("---")
+
+    st.subheader("🏛️ Certidões Federais")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.link_button(
+            "CND Federal (RFB + PGFN)",
+            "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir",
+            use_container_width=True,
+        )
+    with col2:
+        st.link_button(
+            "CRF / FGTS (Caixa)",
+            "https://consulta-crf.caixa.gov.br/consultacrf/",
+            use_container_width=True,
+        )
+    with col3:
+        st.link_button(
+            "CNDT — Débitos Trabalhistas",
+            "https://cndt-certidao.tst.jus.br/inicio.faces",
+            use_container_width=True,
+        )
+
+    st.markdown("---")
+
+    st.subheader("🏛️ Certidão Estadual")
+    st.link_button(
+        "Certidão SEFAZ-GO",
+        "https://www.sefaz.go.gov.br/certidao-de-debitos/emissao",
+        use_container_width=False,
+    )
+
+    st.markdown("---")
+
+    st.subheader("🏙️ Certidão Municipal")
+    _url_mun   = _dados_emp.get("url_certidao_municipal", "")
+    _municipio = _dados_emp.get("municipio_sede", "")
+    if _url_mun:
+        st.link_button(
+            f"Certidão Municipal — {_municipio}",
+            _url_mun,
+            use_container_width=False,
+        )
+    else:
+        st.info(
+            f"URL da certidão municipal de {_municipio or _empresa} não cadastrada. "
+            "Atualize o dicionário EMPRESAS no app.py."
+        )
