@@ -61,11 +61,63 @@ _EMP_LABELS = {
 }
 
 EMPRESAS: dict = {
-    "EDN":      {"nome_completo": "EDN Utilidades Domésticas Importação", "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
-    "Atacadão": {"nome_completo": "Atacadão",  "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
-    "Cristal":  {"nome_completo": "Cristal",   "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
-    "R3":       {"nome_completo": "R3",         "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
-    "Goyaço":   {"nome_completo": "Goyaço",    "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "EDN": {
+        "nome_completo"          : "EDN Utilidades Domésticas Imp. e Exp. Eireli",
+        "cnpj_matriz"            : "20.758.851/0001-05",
+        "ie_matriz"              : "10.607.511-0",
+        "municipio_sede"         : "GOIÂNIA",
+        "url_certidao_municipal" : "",   # preencher com URL da prefeitura de Goiânia
+        "perfil_tributario"      : "",
+        "filiais": [
+            {"filial":  3, "cnpj": "20.758.851/0041-00", "ie": "20.013.121-4", "municipio": "URUAÇU",               "nome": "Uruaçu"},
+            {"filial":  4, "cnpj": "20.758.851/0042-83", "ie": "20.030.770-3", "municipio": "Aparecida de Goiânia", "nome": "Mansões Paraíso"},
+            {"filial":  5, "cnpj": "20.758.851/0043-64", "ie": "20.036.783-8", "municipio": "ITUMBIARA",            "nome": "Itumbiara"},
+            {"filial":  7, "cnpj": "20.758.851/0045-26", "ie": "20.086.156-5", "municipio": "TRINDADE",             "nome": "Trindade"},
+            {"filial":  8, "cnpj": "20.758.851/0047-98", "ie": "20.099.450-6", "municipio": "GOIÂNIA",              "nome": "Jardim Europa"},
+            {"filial": 10, "cnpj": "20.758.851/0046-07", "ie": "20.092.115-0", "municipio": "CALDAS NOVAS",         "nome": "Caldas Novas"},
+            {"filial": 11, "cnpj": "20.758.851/0050-93", "ie": "20.116.302-0", "municipio": "LUZIANIA",             "nome": "Luziânia"},
+            {"filial": 13, "cnpj": "20.758.851/0057-60", "ie": "20.161.077-9", "municipio": "ITABERAÍ",             "nome": "Itaberaí"},
+            {"filial": 16, "cnpj": "20.758.851/0019-34", "ie": "10.831.477-4", "municipio": "GOIÂNIA",              "nome": "Incorporadora 62"},
+            {"filial": 18, "cnpj": "20.758.851/0022-30", "ie": "10.827.190-0", "municipio": "GOIÂNIA",              "nome": "Incorporadora 66"},
+            {"filial": 20, "cnpj": "20.758.851/0034-73", "ie": "10.899.551-8", "municipio": "GOIÂNIA",              "nome": "Vila São João"},
+            {"filial": 24, "cnpj": "20.758.851/0014-20", "ie": "10.827.908-1", "municipio": "GOIÂNIA",              "nome": "Incorporadora 07"},
+            {"filial": 25, "cnpj": "20.758.851/0037-16", "ie": "10.940.721-0", "municipio": "INHUMAS",              "nome": "Inhumas"},
+            {"filial": 26, "cnpj": "20.758.851/0056-89", "ie": "20.161.306-9", "municipio": "ANÁPOLIS",             "nome": "Anápolis 26"},
+            {"filial": 27, "cnpj": "20.758.851/0051-74", "ie": "20.126.648-2", "municipio": "RIO VERDE",            "nome": "Rio Verde"},
+            {"filial": 30, "cnpj": "20.758.851/0040-11", "ie": "10.987.544-3", "municipio": "GOIANIRA",             "nome": "Goianira"},
+            {"filial": 31, "cnpj": "20.758.851/0001-05", "ie": "10.607.511-0", "municipio": "GOIÂNIA",              "nome": "Matriz Centro"},
+            {"filial": 33, "cnpj": "20.758.851/0060-65", "ie": "20.293.165-0", "municipio": "GOIÂNIA",              "nome": "Filial 33"},
+            {"filial": 38, "cnpj": "20.758.851/0058-40", "ie": "20.171.456-6", "municipio": "PORANGATU",            "nome": "Porangatu"},
+            {"filial": 48, "cnpj": "20.758.851/0002-96", "ie": "10.724.310-5", "municipio": "ANÁPOLIS",             "nome": "Anápolis 48"},
+            {"filial": 50, "cnpj": "20.758.851/0035-54", "ie": "10.901.034-5", "municipio": "GOIÂNIA",              "nome": "Incorporadora 44"},
+            {"filial": 60, "cnpj": "20.758.851/0036-35", "ie": "10.932.688-1", "municipio": "GOIÂNIA",              "nome": "Pq. Anhanguera"},
+            {"filial": 71, "cnpj": "20.758.851/0009-62", "ie": "10.811.073-7", "municipio": "GOIÂNIA",              "nome": "Hotel Real"},
+            {"filial": 74, "cnpj": "20.758.851/0012-68", "ie": "10.873.370-0", "municipio": "TRINDADE",             "nome": "Trindade 74"},
+            {"filial": 76, "cnpj": "20.758.851/0007-09", "ie": "10.806.526-0", "municipio": "SENADOR CANEDO",       "nome": "Senador Canedo"},
+            {"filial": 77, "cnpj": "20.758.851/0008-81", "ie": "10.807.111-1", "municipio": "Aparecida de Goiânia", "nome": "Aparecida de Goiânia"},
+            {"filial": 79, "cnpj": "20.758.851/0010-04", "ie": "10.814.950-1", "municipio": "GOIÂNIA",              "nome": "Incorporadora 72"},
+            {"filial": 80, "cnpj": "20.758.851/0011-87", "ie": "10.819.372-1", "municipio": "GOIANÉSIA",            "nome": "Goianésia"},
+            {"filial": 82, "cnpj": "20.758.851/0023-10", "ie": "10.827.170-6", "municipio": "GOIÂNIA",              "nome": "Santa Genoveva"},
+            {"filial": 83, "cnpj": "20.758.851/0025-82", "ie": "10.833.248-9", "municipio": "GOIÂNIA",              "nome": "Araguaia"},
+            {"filial": 84, "cnpj": "20.758.851/0024-00", "ie": "10.832.158-4", "municipio": "GOIÂNIA",              "nome": "Incorporadora 15"},
+            {"filial": 85, "cnpj": "20.758.851/0013-49", "ie": "10.828.382-8", "municipio": "GOIÂNIA",              "nome": "Moinho dos Ventos"},
+            {"filial": 86, "cnpj": "20.758.851/0017-72", "ie": "10.832.210-6", "municipio": "GOIÂNIA",              "nome": "Incorporadora 33"},
+            {"filial": 88, "cnpj": "20.758.851/0015-00", "ie": "10.832.142-8", "municipio": "GOIÂNIA",              "nome": "Incorporadora 47"},
+            {"filial": 89, "cnpj": "20.758.851/0018-53", "ie": "10.828.043-8", "municipio": "GOIÂNIA",              "nome": "Incorporadora 28"},
+            {"filial": 90, "cnpj": "20.758.851/0021-59", "ie": "10.832.205-0", "municipio": "GOIÂNIA",              "nome": "Incorporadora 68"},
+            {"filial": 91, "cnpj": "20.758.851/0032-01", "ie": "10.854.569-5", "municipio": "GOIÂNIA",              "nome": "Incorporadora 40"},
+            {"filial": 93, "cnpj": "20.758.851/0027-44", "ie": "10.857.722-8", "municipio": "GOIÂNIA",              "nome": "Incorporadora 51"},
+            {"filial": 94, "cnpj": "20.758.851/0028-25", "ie": "10.858.991-9", "municipio": "GOIÂNIA",              "nome": "Incorporadora 69"},
+            {"filial": 95, "cnpj": "20.758.851/0030-40", "ie": "10.859.183-2", "municipio": "GOIÂNIA",              "nome": "Incorporadora 65"},
+            {"filial": 96, "cnpj": "20.758.851/0029-06", "ie": "10.855.552-6", "municipio": "GOIÂNIA",              "nome": "Incorporadora 41"},
+            {"filial": 97, "cnpj": "20.758.851/0031-20", "ie": "10.854.061-8", "municipio": "GOIÂNIA",              "nome": "Incorporadora 42"},
+            {"filial": 98, "cnpj": "20.758.851/0016-91", "ie": "10.827.173-0", "municipio": "GOIÂNIA",              "nome": "Incorporadora 43"},
+        ],
+    },
+    "Atacadão": {"nome_completo": "Atacadão",  "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
+    "Cristal":  {"nome_completo": "Cristal",   "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
+    "R3":       {"nome_completo": "R3",         "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
+    "Goyaço":   {"nome_completo": "Goyaço",    "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
 }
 
 with st.sidebar:
@@ -652,142 +704,3 @@ elif _pagina == "📂 SPED / PVA":
         st.caption(f"📂 Pasta monitorada vazia: `{_pasta_monitor}`")
 
     st.markdown("---")
-
-    # ── 2. Copiar arquivos para a pasta monitorada ────────────────────────────
-    st.markdown("### 2. Copiar Arquivos para a Pasta Monitorada")
-    st.caption("Copia os arquivos selecionados acima para a pasta que o PVA vai usar.")
-
-    _pode_copiar = bool(uploaded_txts)
-
-    if _pode_copiar and st.button("📋 Copiar arquivos para a pasta monitorada", key="btn_copiar"):
-        import os as _os
-        for _f in uploaded_txts:
-            _dest = _pasta_monitor / _f.name
-            _dest.write_bytes(_f.getvalue())
-        st.success(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
-
-    # Mostra arquivos prontos na pasta
-    _txts_prontos = list(_pasta_monitor.glob("*.txt"))
-    if _txts_prontos:
-        st.info(
-            f"📂 {len(_txts_prontos)} arquivo(s) na pasta monitorada: "
-            + ", ".join(t.name for t in _txts_prontos)
-        )
-        st.warning(
-            "✋ **Próximo passo:** abra o PVA e importe esses arquivos "
-            "clicando no botão ➕ (Importar Escrituração Fiscal). "
-            "Depois volte aqui e execute a automação abaixo."
-        )
-    elif not _pode_copiar:
-        st.info("ℹ️ Faça upload de pelo menos um arquivo TXT para continuar.")
-
-    # ── limpar pasta monitorada ───────────────────────────────────────────────
-    with st.expander("🗑️ Limpar pasta monitorada"):
-        st.caption("Remove os .txt da pasta após já terem sido importados no PVA.")
-        if st.button("Limpar arquivos .txt da pasta", key="btn_limpar_pasta"):
-            _removidos = 0
-            for _arq in _pasta_monitor.glob("*.txt"):
-                try:
-                    _arq.unlink()
-                    _removidos += 1
-                except Exception:
-                    pass
-            st.success(f"{_removidos} arquivo(s) removido(s).")
-
-    # ── 3. Executar Automacao no PVA ──────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 3. Executar Automação no PVA")
-    st.caption(
-        "Execute **após** importar os arquivos no PVA. "
-        "A automação irá: verificar pendências → gerar → assinar → transmitir em lote. "
-        "Não interaja com o computador enquanto o processo estiver rodando."
-    )
-
-    if st.button(
-        "▶️ Validar → Gerar → Assinar → Transmitir",
-        type="primary",
-        key="btn_batch",
-    ):
-        _script_batch = Path(__file__).parent / "pva_monitor" / "pva_batch.py"
-        import os as _os_batch
-        _env_batch = _os_batch.environ.copy()
-        _env_batch["PYTHONUNBUFFERED"] = "1"
-        _env_batch["PYTHONUTF8"] = "1"
-        with st.spinner(
-            "Automação PVA em andamento... não interaja com o computador "
-            "(pode levar 30-60 min dependendo da quantidade de arquivos)."
-        ):
-            try:
-                _result_batch = subprocess.run(
-                    [sys.executable, str(_script_batch)],
-                    capture_output=True, text=True, encoding="utf-8",
-                    cwd=str(_script_batch.parent),
-                    timeout=14400,  # 4 horas
-                    env=_env_batch,
-                )
-                _output_batch = (_result_batch.stdout or "") + (_result_batch.stderr or "")
-                if _result_batch.returncode == 0:
-                    st.success("✅ Automação concluída com sucesso!")
-                else:
-                    st.error("❌ Erro na automação. Verifique o log abaixo.")
-                st.code(_output_batch or "(sem saída)", language="text")
-            except subprocess.TimeoutExpired:
-                st.error("❌ Timeout (4h). PVA não respondeu.")
-            except Exception as _exc_batch:
-                st.error(f"❌ Erro: {_exc_batch}")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PÁGINA: Certidões
-# ══════════════════════════════════════════════════════════════════════════════
-elif _pagina == "📜 Certidões":
-    st.header(f"📜 Certidões — {_empresa}")
-
-    _cnpj = _dados_emp.get("cnpj_matriz", "")
-    if _cnpj:
-        st.info(f"**CNPJ Matriz:** {_cnpj}")
-        st.caption("Copie o CNPJ acima e cole no site quando solicitado.")
-    else:
-        st.warning("⚠️ CNPJ não cadastrado. Atualize o dicionário EMPRESAS no app.py.")
-
-    # Helper: link estilizado como botão (não trigga rerun do Streamlit)
-    def _btn_link(label: str, url: str):
-        st.markdown(
-            f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
-            f'style="display:inline-block;padding:8px 20px;background:#ff4b4b;'
-            f'color:white;text-decoration:none;border-radius:6px;font-weight:600;'
-            f'font-size:14px;margin:4px 0">{label} ↗</a>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("---")
-
-    st.subheader("🏛️ Certidões Federais")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        _btn_link("CND Federal (RFB + PGFN)",
-                  "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir")
-    with col2:
-        _btn_link("CRF / FGTS (Caixa)",
-                  "https://consulta-crf.caixa.gov.br/consultacrf/")
-    with col3:
-        _btn_link("CNDT — Débitos Trabalhistas",
-                  "https://cndt-certidao.tst.jus.br/inicio.faces")
-
-    st.markdown("---")
-
-    st.subheader("🏛️ Certidão Estadual")
-    _btn_link("Certidão SEFAZ-GO",
-              "https://www.sefaz.go.gov.br/certidao/emissao/")
-
-    st.markdown("---")
-
-    st.subheader("🏙️ Certidão Municipal")
-    _url_mun   = _dados_emp.get("url_certidao_municipal", "")
-    _municipio = _dados_emp.get("municipio_sede", "")
-    if _url_mun:
-        _btn_link(f"Certidão Municipal — {_municipio}", _url_mun)
-    else:
-        st.info(
-            f"URL da certidão municipal de {_municipio or _empresa} não cadastrada. "
-            "Atualize o dicionário EMPRESAS no app.py."
-        )
