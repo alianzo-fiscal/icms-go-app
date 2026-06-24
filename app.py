@@ -837,14 +837,30 @@ elif _pagina == "📜 Certidões":
         _todas_urls.append(_url_mun)
 
     import json as _json_cert
+    import streamlit.components.v1 as _comp
     _urls_js = _json_cert.dumps(_todas_urls)
     _n = len(_todas_urls)
-    st.markdown(
-        f'<button onclick="var u={_urls_js};u.forEach(function(h,i){{setTimeout(function(){{window.open(h,\'_blank\')}},i*400)}})" ' +
-        'style="padding:10px 28px;background:#1f3864;color:white;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer">' +
-        f'🚀 Abrir todas as certidões ({_n})</button>' +
-        '<p style="font-size:11px;color:#888;margin-top:6px">Se o browser bloquear popups, clique em &ldquo;Permitir&rdquo; na barra de endereço.</p>',
-        unsafe_allow_html=True,
+    _comp.html(
+        f"""<!DOCTYPE html>
+<html><body style="margin:0;padding:0">
+<button id="btn" style="width:100%;padding:14px 0;background:#1f3864;color:white;
+  border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer">
+  &#128640; Abrir todas as certid&otilde;es ({_n})
+</button>
+<p style="font-size:11px;color:#888;margin:6px 0 0 2px">
+  Se o browser bloquear popups, clique em &ldquo;Permitir&rdquo; na barra de endere&ccedil;o.
+</p>
+<script>
+document.getElementById('btn').addEventListener('click', function() {{
+  var urls = {_urls_js};
+  urls.forEach(function(u, i) {{
+    setTimeout(function() {{ window.open(u, '_blank'); }}, i * 400);
+  }});
+}});
+</script>
+</body></html>""",
+        height=80,
+        scrolling=False,
     )
     st.markdown("---")
 
