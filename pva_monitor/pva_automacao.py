@@ -149,15 +149,18 @@ class PVAAutomacao:
         subprocess.Popen([str(self.pva_exe)])
         ok = self._aguardar_pva()
         if ok:
-            # Fecha popups de startup (pode aparecer com delay — tenta ate 8x)
-            time.sleep(3)
+            # Aguarda PVA inicializar internamente (versoesModulos, tabelas, etc.)
+            # A janela aparece antes da inicializacao estar completa — precisamos esperar
+            aguardar_init = self.cfg.get("aguardar_pva_inicializar_segundos", 15)
+            logging.info(f"PVA aberto — aguardando inicializacao interna ({aguardar_init}s)")
+            time.sleep(aguardar_init)
+            # Fecha popups de startup (pode aparecer apos inicializacao)
             for _ in range(8):
                 if not _fechar_popups():
                     break
                 time.sleep(2.0)
-            # Pausa extra para PVA estabilizar apos fechar popups
-            time.sleep(3)
-            logging.info("PVA pronto — popups de startup fechados")
+            time.sleep(2)
+            logging.info("PVA pronto para uso")
         return ok
 
     def fechar_escrituracao(self):
