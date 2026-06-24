@@ -173,25 +173,39 @@ class PVAAutomacao:
         _fechar_popups()
 
     def importar_arquivo(self, caminho: Path) -> bool:
-        """Abre menu Escrituracao Fiscal > Importar, cola caminho e confirma."""
+        """Clica em Escrituracao Fiscal > Importar via mouse (mesmo caminho do usuario manual).
+        Ctrl+I causa NullPointerException no PVA 6.0.3 (versoesModulos null no binding).
+        """
         hwnd = self._focar_pva()
         if not hwnd:
             logging.error("PVA nao encontrado para importar arquivo")
             return False
-        # Abre o menu via Alt para inicializar versoesModulos (Ctrl+I sozinho
-        # dispara o binding antes da inicializacao e causa NullPointerException)
-        pyautogui.press("alt")
+
+        # Posicao da janela PVA na tela
+        rect = win32gui.GetWindowRect(hwnd)
+        win_x, win_y = rect[0], rect[1]
+
+        # Clica em "Escrituracao Fiscal" na barra de menu
+        # Menu bar fica ~35px abaixo do topo da janela; "Escrituracao Fiscal" ~80px da esquerda
+        menu_x = win_x + 80
+        menu_y = win_y + 35
+        pyautogui.click(menu_x, menu_y)
         time.sleep(0.8)
-        pyautogui.press("escape")   # fecha menu sem selecionar nada
-        time.sleep(0.5)
-        # Agora usa Ctrl+I — versoesModulos ja foi inicializado pelo menu
-        pyautogui.hotkey("ctrl", "i")
+
+        # No menu aberto, navega ate "Importar" via tecla mnemonica "i"
+        pyautogui.press("i")
         time.sleep(2.0)
+
+        # Dialogo de importacao aberto — cola caminho do arquivo via clipboard
         pyperclip.copy(str(caminho))
-        pyautogui.hotkey("ctrl", "v")
+        pyautogui.hotkey("ctrl", "a")   # seleciona texto existente no campo
+        time.sleep(0.3)
+        pyautogui.hotkey("ctrl", "v")   # cola o caminho
         time.sleep(0.5)
-        pyautogui.press("enter")
+        pyautogui.press("enter")        # confirma
+
         timeout = self.cfg.get("aguardar_importacao_segundos", 90)
+        logging.info(f"Aguardando importacao ({timeout}s)")
         time.sleep(timeout)
         _fechar_popups()
         return True
