@@ -844,7 +844,7 @@ elif _pagina == "📜 Certidões":
         <button onclick="
           var urls = {_urls_js};
           urls.forEach(function(u, i) {{
-            setTimeout(function() {{ window.open(u, '_blank'); }}, i * 300);
+            setTimeout(function() {{ window.top.open(u, '_blank'); }}, i * 300);
           }});
         " style="
           padding:10px 28px;background:#1f3864;color:white;border:none;
