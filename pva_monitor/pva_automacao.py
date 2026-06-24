@@ -173,20 +173,25 @@ class PVAAutomacao:
         _fechar_popups()
 
     def importar_arquivo(self, caminho: Path) -> bool:
-        """Ctrl+I -> dialogo -> cola caminho via clipboard -> Enter."""
+        """Abre menu Escrituracao Fiscal > Importar, cola caminho e confirma."""
         hwnd = self._focar_pva()
         if not hwnd:
             logging.error("PVA nao encontrado para importar arquivo")
             return False
+        # Abre o menu via Alt para inicializar versoesModulos (Ctrl+I sozinho
+        # dispara o binding antes da inicializacao e causa NullPointerException)
+        pyautogui.press("alt")
+        time.sleep(0.8)
+        pyautogui.press("escape")   # fecha menu sem selecionar nada
+        time.sleep(0.5)
+        # Agora usa Ctrl+I — versoesModulos ja foi inicializado pelo menu
         pyautogui.hotkey("ctrl", "i")
-        time.sleep(1.5)
+        time.sleep(2.0)
         pyperclip.copy(str(caminho))
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.5)
         pyautogui.press("enter")
         timeout = self.cfg.get("aguardar_importacao_segundos", 90)
-        # Aguarda o tempo COMPLETO para o import terminar antes de fechar popups
-        # (min(timeout,5) estava cancelando o import com Escape apos 5s)
         time.sleep(timeout)
         _fechar_popups()
         return True
