@@ -51,43 +51,86 @@ if not st.session_state.get("autenticado"):
     st.stop()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
+_EMP_LABELS = {
+    "EDN":      "Empresa 1 — EDN",
+    "Atacadão": "Empresa 2 — Atacadão",
+    "Cristal":  "Empresa 3 — Cristal",
+    "R3":       "Empresa 4 — R3",
+    "Goyaço":   "Empresa 5 — Goyaço",
+}
+
 with st.sidebar:
-    st.image(
-        "https://img.shields.io/badge/Alianzo-Consultoria%20Fiscal-1F3864?style=for-the-badge",
-        use_container_width=True,
+    st.markdown("## 📊 ICMS/GO")
+    st.markdown("Plataforma de Análise Tributária")
+    st.markdown("---")
+
+    # ── Seletor de empresa ────────────────────────────────────────────────────
+    st.markdown("**🏢 Empresa**")
+    empresa_ativa = st.selectbox(
+        "empresa_sel",
+        list(_EMP_LABELS.keys()),
+        format_func=lambda x: _EMP_LABELS[x],
+        key="empresa_sel",
+        label_visibility="collapsed",
     )
-    st.markdown("## 📊 ICMS/GO — Análise Fiscal")
-    st.markdown(
-        """
-**Plataforma de análise tributária** para empresas varejistas no Estado de Goiás.
 
----
+    st.markdown("---")
 
-### 📋 Como usar
-
-1. **Selecione** a aba correspondente à análise desejada
-2. **Faça upload** dos arquivos XLS/CSV de movimentação
-3. **Clique** em *Processar*
-4. **Baixe** os relatórios gerados
-
----
-
-### 📁 Formatos aceitos
-- `.xls` — Excel legado (ERP)
-- `.xlsx` — Excel moderno
-- `.csv` — separado por `;` ou `,`
-
----
-
-### ⚠️ Atenção
-Os arquivos são processados em memória e **não são armazenados** no servidor.
-
----
-"""
+    # ── Navegação ─────────────────────────────────────────────────────────────
+    st.markdown("**🗂️ Menu**")
+    pagina_ativa = st.radio(
+        "nav_pagina",
+        ["📊 Análise Fiscal", "🧮 Apuração Mensal", "📂 SPED / PVA", "📜 Certidões"],
+        key="nav_pagina",
+        label_visibility="collapsed",
     )
+
+    st.markdown("---")
+    st.caption("⚠️ Arquivos processados em memória — não armazenados no servidor.")
     if st.button("🚪 Sair", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
+
+# ── Dados das Empresas ────────────────────────────────────────────────────────
+# CNPJ e município serão preenchidos após envio da planilha de filiais.
+# url_certidao_municipal: URL direta do site da prefeitura para emissão de CND.
+EMPRESAS: dict = {
+    "EDN": {
+        "nome_completo"          : "EDN Utilidades Domésticas Importação",
+        "cnpj_matriz"            : "",   # a preencher
+        "municipio_sede"         : "",   # a preencher
+        "url_certidao_municipal" : "",   # a preencher
+        "perfil_tributario"      : "",   # particularidades fiscais — a preencher
+    },
+    "Atacadão": {
+        "nome_completo"          : "Atacadão",
+        "cnpj_matriz"            : "",
+        "municipio_sede"         : "",
+        "url_certidao_municipal" : "",
+        "perfil_tributario"      : "",
+    },
+    "Cristal": {
+        "nome_completo"          : "Cristal",
+        "cnpj_matriz"            : "",
+        "municipio_sede"         : "",
+        "url_certidao_municipal" : "",
+        "perfil_tributario"      : "",
+    },
+    "R3": {
+        "nome_completo"          : "R3",
+        "cnpj_matriz"            : "",
+        "municipio_sede"         : "",
+        "url_certidao_municipal" : "",
+        "perfil_tributario"      : "",
+    },
+    "Goyaço": {
+        "nome_completo"          : "Goyaço",
+        "cnpj_matriz"            : "",
+        "municipio_sede"         : "",
+        "url_certidao_municipal" : "",
+        "perfil_tributario"      : "",
+    },
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 SCRIPTS_DIR = Path(__file__).parent
@@ -298,20 +341,23 @@ def processar_apuracao(ent_files, sai_files):
 
 
 # ── Layout principal ───────────────────────────────────────────────────────────
-st.title("📊 ICMS/GO — Plataforma de Análise Fiscal")
-st.markdown(
-    "Faça upload dos arquivos de movimentação fiscal e gere relatórios de divergências e apuração de ICMS."
-)
+_empresa  = st.session_state.get("empresa_sel", "EDN")
+_pagina   = st.session_state.get("nav_pagina",  "📊 Análise Fiscal")
+_dados_emp = EMPRESAS.get(_empresa, EMPRESAS["EDN"])
 
-tab_ent, tab_sai, tab_apur, tab_sped = st.tabs(
-    ["📥 Análise de Entradas", "📤 Análise de Saídas", "🧮 Apuração Mensal", "📂 SPED/PVA"]
-)
+st.title(f"📊 {_empresa} — ICMS/GO")
+st.caption(_dados_emp["nome_completo"] or _empresa)
+st.markdown("---")
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 1 — ENTRADAS
-# ────────────────────────────────────────────────────────────────────────────
-with tab_ent:
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: Análise Fiscal
+# ══════════════════════════════════════════════════════════════════════════════
+if _pagina == "📊 Análise Fiscal":
+    tab_ent, tab_sai = st.tabs(["📥 Análise de Entradas", "📤 Análise de Saídas"])
+
+    # ── Entradas ──────────────────────────────────────────────────────────────
+    with tab_ent:
     st.header("Análise de Entradas — ICMS/GO")
     st.markdown(
         """
@@ -406,11 +452,8 @@ Gera relatório **Excel** (abas por divergência) + relatório **Word** (anális
         except Exception as exc:
             st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
-
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 2 — SAÍDAS
-# ────────────────────────────────────────────────────────────────────────────
-with tab_sai:
+    # ── Saídas ────────────────────────────────────────────────────────────────
+    with tab_sai:
     st.header("Análise de Saídas — ICMS/GO")
     st.markdown(
         """
@@ -506,10 +549,10 @@ Gera relatório **Excel** (Resumo + Base Consolidada + abas por divergência) + 
             st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 3 — APURAÇÃO MENSAL
-# ────────────────────────────────────────────────────────────────────────────
-with tab_apur:
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: Apuração Mensal
+# ══════════════════════════════════════════════════════════════════════════════
+elif _pagina == "🧮 Apuração Mensal":
     st.header("Apuração Mensal de ICMS — GO")
     st.markdown(
         """
@@ -589,10 +632,10 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
         except Exception as exc:
             st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
 
-# ────────────────────────────────────────────────────────────────────────────
-# TAB 4 — SPED / PVA
-# ────────────────────────────
-with tab_sped:
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: SPED / PVA
+# ══════════════════════════════════════════════════════════════════════════════
+elif _pagina == "📂 SPED / PVA":
     st.subheader("📂 SPED / PVA — Validação e Transmissão em Lote")
 
     # ── lê config via _carregar_config() do fase1_lote (tem defaults corretos) ─
@@ -669,55 +712,4 @@ with tab_sped:
 
     # ── limpar pasta monitorada ───────────────────────────────────────────────
     with st.expander("🗑️ Limpar pasta monitorada"):
-        st.caption("Remove os .txt da pasta após já terem sido importados no PVA.")
-        if st.button("Limpar arquivos .txt da pasta", key="btn_limpar_pasta"):
-            _removidos = 0
-            for _arq in _pasta_monitor.glob("*.txt"):
-                try:
-                    _arq.unlink()
-                    _removidos += 1
-                except Exception:
-                    pass
-            st.success(f"{_removidos} arquivo(s) removido(s).")
-
-    # ── 3. Executar Automacao no PVA ──────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 3. Executar Automação no PVA")
-    st.caption(
-        "Execute **após** importar os arquivos no PVA. "
-        "A automação irá: verificar pendências → gerar → assinar → transmitir em lote. "
-        "Não interaja com o computador enquanto o processo estiver rodando."
-    )
-
-    if st.button(
-        "▶️ Validar → Gerar → Assinar → Transmitir",
-        type="primary",
-        key="btn_batch",
-    ):
-        _script_batch = Path(__file__).parent / "pva_monitor" / "pva_batch.py"
-        import os as _os_batch
-        _env_batch = _os_batch.environ.copy()
-        _env_batch["PYTHONUNBUFFERED"] = "1"
-        _env_batch["PYTHONUTF8"] = "1"
-        with st.spinner(
-            "Automação PVA em andamento... não interaja com o computador "
-            "(pode levar 30-60 min dependendo da quantidade de arquivos)."
-        ):
-            try:
-                _result_batch = subprocess.run(
-                    [sys.executable, str(_script_batch)],
-                    capture_output=True, text=True, encoding="utf-8",
-                    cwd=str(_script_batch.parent),
-                    timeout=14400,  # 4 horas
-                    env=_env_batch,
-                )
-                _output_batch = (_result_batch.stdout or "") + (_result_batch.stderr or "")
-                if _result_batch.returncode == 0:
-                    st.success("✅ Automação concluída com sucesso!")
-                else:
-                    st.error("❌ Erro na automação. Verifique o log abaixo.")
-                st.code(_output_batch or "(sem saída)", language="text")
-            except subprocess.TimeoutExpired:
-                st.error("❌ Timeout (4h). PVA não respondeu.")
-            except Exception as _exc_batch:
-                st.error(f"❌ Erro: {_exc_batch}")
+        st.
