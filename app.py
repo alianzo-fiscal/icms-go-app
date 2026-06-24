@@ -66,7 +66,7 @@ EMPRESAS: dict = {
         "cnpj_matriz"            : "20.758.851/0001-05",
         "ie_matriz"              : "10.607.511-0",
         "municipio_sede"         : "GOIÂNIA",
-        "url_certidao_municipal" : "",   # preencher com URL da prefeitura de Goiânia
+        "url_certidao_municipal" : "https://www.goiania.go.gov.br/sistemas/sccer/asp/sccer00300f0.asp",
         "perfil_tributario"      : "",
         "filiais": [
             {"filial":  3, "cnpj": "20.758.851/0041-00", "ie": "20.013.121-4", "municipio": "URUAÇU",               "nome": "Uruaçu"},
@@ -703,4 +703,4 @@ elif _pagina == "📂 SPED / PVA":
     else:
         st.caption(f"📂 Pasta monitorada vazia: `{_pasta_monitor}`")
 
-    st.markdown("---")
+    s
