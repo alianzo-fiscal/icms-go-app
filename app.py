@@ -114,10 +114,10 @@ EMPRESAS: dict = {
             {"filial": 98, "cnpj": "20.758.851/0016-91", "ie": "10.827.173-0", "municipio": "GOIÂNIA",              "nome": "Incorporadora 43"},
         ],
     },
-    "Atacadão": {"nome_completo": "Atacadão",  "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
-    "Cristal":  {"nome_completo": "Cristal",   "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
-    "R3":       {"nome_completo": "R3",         "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
-    "Goyaço":   {"nome_completo": "Goyaço",    "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
+    "Atacadão": {"nome_completo": "Atacadão", "cnpj_matriz": "", "ie_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": "", "filiais": []},
+    "Cristal":  {"nome_completo": "Cristal",   "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "R3":       {"nome_completo": "R3",         "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
+    "Goyaço":   {"nome_completo": "Goyaço",    "cnpj_matriz": "", "municipio_sede": "", "url_certidao_municipal": "", "perfil_tributario": ""},
 }
 
 with st.sidebar:
@@ -703,4 +703,187 @@ elif _pagina == "📂 SPED / PVA":
     else:
         st.caption(f"📂 Pasta monitorada vazia: `{_pasta_monitor}`")
 
-    s
+    st.markdown("---")
+
+    # ── 2. Copiar arquivos para a pasta monitorada ────────────────────────────
+    st.markdown("### 2. Copiar Arquivos para a Pasta Monitorada")
+    st.caption("Copia os arquivos selecionados acima para a pasta que o PVA vai usar.")
+
+    _pode_copiar = bool(uploaded_txts)
+
+    if _pode_copiar and st.button("📋 Copiar arquivos para a pasta monitorada", key="btn_copiar"):
+        import os as _os
+        for _f in uploaded_txts:
+            _dest = _pasta_monitor / _f.name
+            _dest.write_bytes(_f.getvalue())
+        st.success(f"✔ {len(uploaded_txts)} arquivo(s) copiado(s) para `{_pasta_monitor}`")
+
+    # Mostra arquivos prontos na pasta
+    _txts_prontos = list(_pasta_monitor.glob("*.txt"))
+    if _txts_prontos:
+        st.info(
+            f"📂 {len(_txts_prontos)} arquivo(s) na pasta monitorada: "
+            + ", ".join(t.name for t in _txts_prontos)
+        )
+        st.warning(
+            "✋ **Próximo passo:** abra o PVA e importe esses arquivos "
+            "clicando no botão ➕ (Importar Escrituração Fiscal). "
+            "Depois volte aqui e execute a automação abaixo."
+        )
+    elif not _pode_copiar:
+        st.info("ℹ️ Faça upload de pelo menos um arquivo TXT para continuar.")
+
+    # ── limpar pasta monitorada ───────────────────────────────────────────────
+    with st.expander("🗑️ Limpar pasta monitorada"):
+        st.caption("Remove os .txt da pasta após já terem sido importados no PVA.")
+        if st.button("Limpar arquivos .txt da pasta", key="btn_limpar_pasta"):
+            _removidos = 0
+            for _arq in _pasta_monitor.glob("*.txt"):
+                try:
+                    _arq.unlink()
+                    _removidos += 1
+                except Exception:
+                    pass
+            st.success(f"{_removidos} arquivo(s) removido(s).")
+
+    # ── 3. Executar Automacao no PVA ──────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 3. Executar Automação no PVA")
+    st.caption(
+        "Execute **após** importar os arquivos no PVA. "
+        "A automação irá: verificar pendências → gerar → assinar → transmitir em lote. "
+        "Não interaja com o computador enquanto o processo estiver rodando."
+    )
+
+    if st.button(
+        "▶️ Validar → Gerar → Assinar → Transmitir",
+        type="primary",
+        key="btn_batch",
+    ):
+        _script_batch = Path(__file__).parent / "pva_monitor" / "pva_batch.py"
+        import os as _os_batch
+        _env_batch = _os_batch.environ.copy()
+        _env_batch["PYTHONUNBUFFERED"] = "1"
+        _env_batch["PYTHONUTF8"] = "1"
+        with st.spinner(
+            "Automação PVA em andamento... não interaja com o computador "
+            "(pode levar 30-60 min dependendo da quantidade de arquivos)."
+        ):
+            try:
+                _result_batch = subprocess.run(
+                    [sys.executable, str(_script_batch)],
+                    capture_output=True, text=True, encoding="utf-8",
+                    cwd=str(_script_batch.parent),
+                    timeout=14400,  # 4 horas
+                    env=_env_batch,
+                )
+                _output_batch = (_result_batch.stdout or "") + (_result_batch.stderr or "")
+                if _result_batch.returncode == 0:
+                    st.success("✅ Automação concluída com sucesso!")
+                else:
+                    st.error("❌ Erro na automação. Verifique o log abaixo.")
+                st.code(_output_batch or "(sem saída)", language="text")
+            except subprocess.TimeoutExpired:
+                st.error("❌ Timeout (4h). PVA não respondeu.")
+            except Exception as _exc_batch:
+                st.error(f"❌ Erro: {_exc_batch}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: Certidões
+# ══════════════════════════════════════════════════════════════════════════════
+elif _pagina == "📜 Certidões":
+    st.header(f"📜 Certidões — {_empresa}")
+
+    _cnpj = _dados_emp.get("cnpj_matriz", "")
+    _ie   = _dados_emp.get("ie_matriz", "")
+    if _cnpj:
+        col_a, col_b = st.columns(2)
+        col_a.metric("CNPJ Matriz", _cnpj)
+        col_b.metric("Inscrição Estadual (Matriz)", _ie or "—")
+        st.caption("Copie o CNPJ/IE acima e cole no site quando solicitado.")
+    else:
+        st.warning("⚠️ CNPJ não cadastrado. Atualize o dicionário EMPRESAS no app.py.")
+
+    # Tabela de filiais
+    _filiais = _dados_emp.get("filiais", [])
+    if _filiais:
+        with st.expander(f"📋 Ver todas as filiais ({len(_filiais)} unidades)"):
+            import pandas as _pd_cert
+            _df_fil = _pd_cert.DataFrame(_filiais)[["filial", "nome", "cnpj", "ie", "municipio"]]
+            _df_fil.columns = ["Filial", "Nome", "CNPJ", "IE", "Município"]
+            st.dataframe(_df_fil, use_container_width=True, hide_index=True)
+
+    _url_mun   = _dados_emp.get("url_certidao_municipal", "")
+    _municipio = _dados_emp.get("municipio_sede", "")
+
+    # Helper: link estilizado como botão (não trigga rerun do Streamlit)
+    def _btn_link(label: str, url: str):
+        st.markdown(
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+            f'style="display:inline-block;padding:8px 20px;background:#ff4b4b;'
+            f'color:white;text-decoration:none;border-radius:6px;font-weight:600;'
+            f'font-size:14px;margin:4px 0">{label} ↗</a>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Botão "Abrir todas" ───────────────────────────────────────────────────
+    _todas_urls = [
+        "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj",
+        "https://consulta-crf.caixa.gov.br/consultacrf/",
+        "https://cndt-certidao.tst.jus.br/inicio.faces",
+        "https://www.sefaz.go.gov.br/certidao/emissao/",
+    ]
+    if _url_mun:
+        _todas_urls.append(_url_mun)
+
+    import json as _json_cert
+    import streamlit.components.v1 as _comp
+    _urls_js = _json_cert.dumps(_todas_urls)
+    _comp.html(
+        f"""
+        <button onclick="
+          var urls = {_urls_js};
+          urls.forEach(function(u, i) {{
+            setTimeout(function() {{ window.open(u, '_blank'); }}, i * 300);
+          }});
+        " style="
+          padding:10px 28px;background:#1f3864;color:white;border:none;
+          border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;
+        ">🚀 Abrir todas as certidões ({len(_todas_urls)})</button>
+        <p style="font-size:11px;color:#888;margin-top:6px">
+          Se o browser bloquear popups, clique em "Permitir" na barra de endereço.
+        </p>
+        """,
+        height=70,
+    )
+
+    st.markdown("---")
+
+    st.subheader("🏛️ Certidões Federais")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        _btn_link("CND Federal (RFB + PGFN)",
+                  "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj")
+    with col2:
+        _btn_link("CRF / FGTS (Caixa)",
+                  "https://consulta-crf.caixa.gov.br/consultacrf/")
+    with col3:
+        _btn_link("CNDT — Débitos Trabalhistas",
+                  "https://cndt-certidao.tst.jus.br/inicio.faces")
+
+    st.markdown("---")
+
+    st.subheader("🏛️ Certidão Estadual")
+    _btn_link("Certidão SEFAZ-GO",
+              "https://www.sefaz.go.gov.br/certidao/emissao/")
+
+    st.markdown("---")
+
+    st.subheader("🏙️ Certidão Municipal")
+    if _url_mun:
+        _btn_link(f"Certidão Municipal — {_municipio}", _url_mun)
+    else:
+        st.info(
+            f"URL da certidão municipal de {_municipio or _empresa} não cadastrada. "
+            "Atualize o dicionário EMPRESAS no app.py."
+        )
