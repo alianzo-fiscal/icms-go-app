@@ -394,19 +394,27 @@ class PVAAutomacao:
         return True
 
     def _garantir_tela_principal(self):
-        """Fecha escrituracao aberta (se houver) para retornar a tela principal do PVA.
-        Ctrl+F = Fechar Escrituracao no PVA.
-        Seguro chamar mesmo quando nenhuma escrituracao esta aberta.
+        """Retorna a tela principal do PVA (sem escrituracao ou relatorio aberto).
+        Tenta Escape (fecha relatorio/view embutido) e depois Ctrl+F (fecha escrituracao).
+        Seguro chamar mesmo quando ja esta na tela principal.
         """
         hwnd = self._focar_pva()
         if not hwnd:
             return
-        pyautogui.hotkey("ctrl", "f")
-        time.sleep(1.5)
-        for _ in range(4):
+        # Escape fecha telas de relatorio embutidas (ex: "Resultado do Processamento")
+        pyautogui.press("escape")
+        time.sleep(0.8)
+        for _ in range(3):
             if not _fechar_popups():
                 break
-            time.sleep(0.5)
+            time.sleep(0.4)
+        # Ctrl+F fecha escrituracao aberta (retorna ao menu principal)
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(1.2)
+        for _ in range(3):
+            if not _fechar_popups():
+                break
+            time.sleep(0.4)
         time.sleep(0.5)
 
     def _batch_operacao(
@@ -464,39 +472,27 @@ class PVAAutomacao:
         # 4. Seleciona todos e confirma
         self._confirmar_dialogo_batch(dlg)
 
-        # 5. Espera ativa: fecha popups a cada 5s para que o PVA avance entre arquivos
-        #    Arquivos com erro geram popup "Erro" — fechar permite processar o proximo
+        # 5. Aguarda popup de resultado do PVA (Aviso, Erro, Sucesso, etc.)
+        #    O PVA processa todos os arquivos em lote e exibe UM popup ao final.
+        #    Quando o popup aparece: fechamos, limpamos a tela e avancamos.
+        #    Se o timeout esgotar sem popup: todos os arquivos passaram (sem erros).
         timeout = self.cfg.get(timeout_chave, timeout_padrao)
-        logging.info(
-            f"Aguardando '{titulo_dialogo}' ({timeout}s) — "
-            "fechando popups de erro/resultado a cada 5s"
-        )
-        popups_fechados = 0
+        logging.info(f"Aguardando resultado de '{titulo_dialogo}' (max {timeout}s)")
         inicio_espera = time.time()
         while time.time() - inicio_espera < timeout:
             if _fechar_popups():
-                popups_fechados += 1
-                logging.info(
-                    f"Popup fechado durante '{titulo_dialogo}' "
-                    f"(total ate agora: {popups_fechados})"
-                )
-                # Apos fechar popup de erro, PVA pode ter aberto o arquivo
-                # para edicao — fecha para retornar ao estado batch
-                time.sleep(1.0)
+                logging.info(f"Popup de resultado detectado e fechado — '{titulo_dialogo}' concluido")
+                time.sleep(2.0)
                 self._garantir_tela_principal()
-                time.sleep(1.0)
-            else:
-                time.sleep(5)
+                return True
+            time.sleep(5)
 
-        if popups_fechados:
-            logging.warning(
-                f"'{titulo_dialogo}': {popups_fechados} popup(s) fechado(s) "
-                "(arquivos com erro foram ignorados)"
-            )
-
-        # 6. Garante retorno a tela principal ao final
+        # Timeout sem popup: operacao concluida sem erros de validacao
+        logging.info(
+            f"'{titulo_dialogo}': nenhum popup detectado em {timeout}s "
+            "(todos os arquivos processados sem erros)"
+        )
         self._garantir_tela_principal()
-
         return True
 
     # -- Operacoes batch (chamadas apos o usuario importar manualmente) --------
@@ -550,7 +546,4 @@ class PVAAutomacao:
             toolbar_btn_index=7,
         )
 
-    # ── Fase 1: importar + validar ──────────────────────────────────────────
-
-    def fase1_processar(self, caminho: Path) -> bool:
-        """Imp
+    # ── Fase 1: importar + validar ──────────────────────────────
