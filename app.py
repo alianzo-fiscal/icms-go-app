@@ -749,37 +749,35 @@ elif _pagina == "📜 Certidões":
     else:
         st.warning("⚠️ CNPJ não cadastrado. Atualize o dicionário EMPRESAS no app.py.")
 
+    # Helper: link estilizado como botão (não trigga rerun do Streamlit)
+    def _btn_link(label: str, url: str):
+        st.markdown(
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+            f'style="display:inline-block;padding:8px 20px;background:#ff4b4b;'
+            f'color:white;text-decoration:none;border-radius:6px;font-weight:600;'
+            f'font-size:14px;margin:4px 0">{label} ↗</a>',
+            unsafe_allow_html=True,
+        )
+
     st.markdown("---")
 
     st.subheader("🏛️ Certidões Federais")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.link_button(
-            "CND Federal (RFB + PGFN)",
-            "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir",
-            use_container_width=True,
-        )
+        _btn_link("CND Federal (RFB + PGFN)",
+                  "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir")
     with col2:
-        st.link_button(
-            "CRF / FGTS (Caixa)",
-            "https://consulta-crf.caixa.gov.br/consultacrf/",
-            use_container_width=True,
-        )
+        _btn_link("CRF / FGTS (Caixa)",
+                  "https://consulta-crf.caixa.gov.br/consultacrf/")
     with col3:
-        st.link_button(
-            "CNDT — Débitos Trabalhistas",
-            "https://cndt-certidao.tst.jus.br/inicio.faces",
-            use_container_width=True,
-        )
+        _btn_link("CNDT — Débitos Trabalhistas",
+                  "https://cndt-certidao.tst.jus.br/inicio.faces")
 
     st.markdown("---")
 
     st.subheader("🏛️ Certidão Estadual")
-    st.link_button(
-        "Certidão SEFAZ-GO",
-        "https://www.sefaz.go.gov.br/certidao-de-debitos/emissao",
-        use_container_width=False,
-    )
+    _btn_link("Certidão SEFAZ-GO",
+              "https://www.sefaz.go.gov.br/certidao/emissao/")
 
     st.markdown("---")
 
@@ -787,13 +785,6 @@ elif _pagina == "📜 Certidões":
     _url_mun   = _dados_emp.get("url_certidao_municipal", "")
     _municipio = _dados_emp.get("municipio_sede", "")
     if _url_mun:
-        st.link_button(
-            f"Certidão Municipal — {_municipio}",
-            _url_mun,
-            use_container_width=False,
-        )
+        _btn_link(f"Certidão Municipal — {_municipio}", _url_mun)
     else:
-        st.info(
-            f"URL da certidão municipal de {_municipio or _empresa} não cadastrada. "
-            "Atualize o dicionário EMPRESAS no app.py."
-        )
+        
