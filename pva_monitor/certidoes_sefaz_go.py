@@ -91,19 +91,14 @@ def emitir_cnpj(page, cnpj_num: str, output_path: Path) -> dict:
         page.goto(URL_SEFAZ, timeout=20000, wait_until="domcontentloaded")
         time.sleep(2)
 
-        # 1. Seleciona radio CNPJ (em vez de CPF)
-        page.click('input[value="CNPJ"]', timeout=5000)
+        # 1. Seleciona radio CNPJ — value="2" no formulário real
+        page.click('input[name="Certidao.TipoDocumento"][value="2"]', timeout=8000)
         time.sleep(0.5)
 
-        # 2. Preenche o CNPJ (campo muda para "CNPJ:" após clicar no radio)
-        campo = page.query_selector('input[name*="CNPJ" i], input[id*="CNPJ" i], input[name*="cpfcnpj" i], input[id*="cpfcnpj" i]')
+        # 2. Preenche campo CNPJ (id="Certidao.NumeroDocumentoCNPJ")
+        campo = page.query_selector('input[id="Certidao.NumeroDocumentoCNPJ"]')
         if not campo:
-            # fallback: pega o único input text visível
-            campos = page.query_selector_all('input[type="text"]:visible, input[type="text"]')
-            campo = campos[0] if campos else None
-
-        if not campo:
-            resultado["msg"] = "Campo CNPJ não encontrado"
+            resultado["msg"] = "Campo Certidao.NumeroDocumentoCNPJ não encontrado"
             return resultado
 
         campo.click()
@@ -112,7 +107,7 @@ def emitir_cnpj(page, cnpj_num: str, output_path: Path) -> dict:
         time.sleep(0.5)
 
         # 3. Clica em Emitir
-        page.click('input[value="Emitir"], button:has-text("Emitir")', timeout=5000)
+        page.click('input[type="submit"][value="Emitir"]', timeout=5000)
 
         # 4. Aguarda resultado — pode abrir nova aba ou mudar a página
         try:
