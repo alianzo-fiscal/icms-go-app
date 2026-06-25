@@ -153,6 +153,7 @@ def main():
     ap.add_argument("--headless", action="store_true", help="Rodar sem janela (modo silencioso)")
     ap.add_argument("--output",   default="", help="Pasta de saída (padrão: certidoes_output)")
     ap.add_argument("--apenas",   default="", help="Rodar apenas este CNPJ (14 dígitos)")
+    ap.add_argument("--limite",   type=int, default=0, help="Limitar aos primeiros N CNPJs")
     args = ap.parse_args()
 
     empresa = EMPRESAS.get(args.empresa.upper())
@@ -173,6 +174,8 @@ def main():
         if not lista:
             print(f"CNPJ '{args.apenas}' não encontrado na empresa {args.empresa}.")
             sys.exit(1)
+    if args.limite > 0:
+        lista = lista[:args.limite]
 
     print(f"\n{'='*60}")
     print(f"  SEFAZ-GO — Emissão em lote — {empresa['nome']}")
