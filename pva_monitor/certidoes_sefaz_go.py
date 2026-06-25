@@ -108,18 +108,29 @@ def emitir_cnpj(page, cnpj_num: str, output_path: Path) -> dict:
 
         # 3. Clica em Emitir
         page.click('input[type="submit"][value="Emitir"]', timeout=5000)
+        time.sleep(2)
 
-        # 4. Aguarda resultado — pode abrir nova aba ou mudar a página
+        # 4. Confirma o nome do contribuinte ("Sim/Não") se aparecer
         try:
-            with page.expect_popup(timeout=8000) as popup_info:
+            btn_sim = page.query_selector('input[value="Sim"], button:has-text("Sim")')
+            if btn_sim and btn_sim.is_visible():
+                btn_sim.click()
+                time.sleep(3)
+        except Exception:
+            pass
+
+        # 5. Aguarda a certidão final — pode abrir popup ou ficar na mesma aba
+        try:
+            with page.expect_popup(timeout=10000) as popup_info:
                 time.sleep(1)
             nova_aba = popup_info.value
-            nova_aba.wait_for_load_state("load", timeout=15000)
+            nova_aba.wait_for_load_state("load", timeout=20000)
+            time.sleep(2)
             nova_aba.pdf(path=str(output_path), print_background=True)
             nova_aba.close()
         except Exception:
-            # Sem popup — resultado na mesma página
-            time.sleep(4)
+            # Sem popup — certidão na mesma página
+            time.sleep(3)
             page.pdf(path=str(output_path), print_background=True)
 
         resultado["status"] = "ok"
