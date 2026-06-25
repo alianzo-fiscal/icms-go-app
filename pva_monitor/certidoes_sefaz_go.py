@@ -106,32 +106,36 @@ def emitir_cnpj(page, cnpj_num: str, output_path: Path) -> dict:
         campo.type(cnpj_num, delay=30)
         time.sleep(0.5)
 
-        # 3. Clica em Emitir
-        page.click('input[type="submit"][value="Emitir"]', timeout=5000)
+        # 3. Clica em Emitir — o site abre popup com confirmação
+        with context.expect_page() as popup_info:
+            page.click('input[type="submit"][value="Emitir"]', timeout=5000)
+
+        popup = popup_info.value
+        popup.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(2)
 
-        # 4. Confirma o nome do contribuinte ("Sim/Não") se aparecer
-        try:
-            btn_sim = page.query_selector('input[value="Sim"], button:has-text("Sim")')
-            if btn_sim and btn_sim.is_visible():
-                btn_sim.click()
+        # 4. Popup pode ser a confirmação "Confirma o Nome..." ou já a certidão
+        btn_sim = popup.query_selector('input[value="Sim"], button:has-text("Sim")')
+        if btn_sim and btn_sim.is_visible():
+            # Há uma segunda etapa de confirmação — pode abrir outro popup
+            try:
+                with context.expect_page() as cert_info:
+                    btn_sim.click()
+                cert_page = cert_info.value
+                cert_page.wait_for_load_state("load", timeout=20000)
                 time.sleep(3)
-        except Exception:
-            pass
-
-        # 5. Aguarda a certidão final — pode abrir popup ou ficar na mesma aba
-        try:
-            with page.expect_popup(timeout=10000) as popup_info:
-                time.sleep(1)
-            nova_aba = popup_info.value
-            nova_aba.wait_for_load_state("load", timeout=20000)
-            time.sleep(2)
-            nova_aba.pdf(path=str(output_path), print_background=True)
-            nova_aba.close()
-        except Exception:
-            # Sem popup — certidão na mesma página
+                cert_page.pdf(path=str(output_path), print_background=True)
+                cert_page.close()
+            except Exception:
+                # Clicou Sim mas certidão ficou no mesmo popup
+                time.sleep(4)
+                popup.pdf(path=str(output_path), print_background=True)
+            popup.close()
+        else:
+            # Popup já é a certidão (sem etapa de confirmação)
             time.sleep(3)
-            page.pdf(path=str(output_path), print_background=True)
+            popup.pdf(path=str(output_path), print_background=True)
+            popup.close()
 
         resultado["status"] = "ok"
         resultado["arquivo"] = str(output_path)
