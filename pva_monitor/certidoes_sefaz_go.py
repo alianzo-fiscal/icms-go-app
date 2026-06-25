@@ -84,7 +84,7 @@ def _so_numeros(s: str) -> str:
     return "".join(c for c in s if c.isdigit())
 
 
-def emitir_cnpj(page, cnpj_num: str, output_path: Path) -> dict:
+def emitir_cnpj(page, context, cnpj_num: str, output_path: Path) -> dict:
     """Emite a certidão para um CNPJ e salva o PDF. Retorna dict com status."""
     resultado = {"cnpj": cnpj_num, "status": "erro", "arquivo": "", "msg": ""}
     try:
@@ -205,7 +205,7 @@ def main():
                 resultados.append({"cnpj": cnpj_num, "status": "pulado", "arquivo": str(pdf_path), "msg": "já existia"})
                 continue
 
-            res = emitir_cnpj(page, cnpj_num, pdf_path)
+            res = emitir_cnpj(page, context, cnpj_num, pdf_path)
             resultados.append(res)
 
             if res["status"] == "ok":
