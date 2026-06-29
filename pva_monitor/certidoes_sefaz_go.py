@@ -73,54 +73,33 @@ def _so_numeros(s):
     return "".join(c for c in str(s) if c.isdigit())
 
 
+def _pagina_tem_certidao(pg):
+    """Retorna True se a pagina ja esta em certidao.asp"""
+    try:
+        url = pg.url or ""
+        return "certidao.asp" in url and not pg.is_closed()
+    except Exception:
+        return False
+
+
 def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
     resultado = {"cnpj": cnpj_num, "status": "erro", "arquivo": "", "msg": ""}
 
-    # ---- coleta unificada ----
-    all_downloads = []      # objetos Download do Playwright
-    attachment_bytes = []   # bytes de respostas com Content-Disposition: attachment
-
-    def _capture_dl(dl):
-        if debug:
-            print(f"    [DL] url={dl.url}")
-        all_downloads.append(dl)
-
-    def _capture_resp(label, resp):
-        try:
-            cd = resp.headers.get("content-disposition", "")
-            ct = resp.headers.get("content-type", "")
-            if debug:
-                print(f"    [{label}] {resp.status} ct={ct[:50]} cd={cd[:50]} url={resp.url[:60]}")
-            # SEFAZ-GO serve certidao.asp sem Content-Type/Content-Disposition
-            is_certidao = ("sefaz.go.gov.br" in resp.url and
-                           "certidao.asp" in resp.url and
-                           resp.status == 200)
-            if is_certidao or "attachment" in cd.lower() or "application/octet-stream" in ct.lower():
-                attachment_bytes.append(resp.body())
-        except Exception:
-            pass
+    novas_paginas = []
 
     def _on_new_page(new_pg):
-        if debug:
-            print(f"    [NEW_PAGE] {new_pg.url}")
-        new_pg.on("download", _capture_dl)
-        new_pg.on("response", lambda r: _capture_resp("new_page", r))
+        novas_paginas.append(new_pg)
 
-    # registra para TODAS as páginas novas criadas daqui em diante
     context.on("page", _on_new_page)
 
     try:
         page.goto(URL_SEFAZ_GO, timeout=20000, wait_until="domcontentloaded")
         time.sleep(2)
 
-        # Seleciona CNPJ
         page.click('input[name="Certidao.TipoDocumento"][value="2"]', timeout=8000)
         time.sleep(0.4)
-
-        # Espólio = Não
         page.click('#Certidao\\.EspolioN', timeout=5000)
 
-        # Preenche CNPJ
         campo = page.query_selector('input[id="Certidao.NumeroDocumentoCNPJ"]')
         if not campo:
             resultado["msg"] = "Campo CNPJ nao encontrado"
@@ -130,7 +109,7 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
         campo.type(cnpj_num, delay=30)
         time.sleep(0.4)
 
-        # Emitir → abre popup de confirmação
+        # Clica Emitir → popup de confirmação
         with context.expect_page() as popup_info:
             page.click('input[type="submit"][value="Emitir"]', timeout=5000)
 
@@ -138,17 +117,9 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
         popup.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(1)
 
-        # Registra listeners no popup
-        popup.on("download", _capture_dl)
-        popup.on("response", lambda r: _capture_resp("popup", r))
-        # Também no main page (pode ser que o download volte para ela)
-        page.on("download", _capture_dl)
-        page.on("response", lambda r: _capture_resp("main", r))
-
         if debug:
             print(f"  Popup URL: {popup.url}")
 
-        # Localiza botão Sim
         btn_sim = popup.query_selector('#Certidao\\.ConfirmaNomeContribuinteSim')
         if not btn_sim:
             btn_sim = popup.query_selector('input[value="Sim"]')
@@ -158,43 +129,66 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
             popup.close()
             return resultado
 
-        # Clica Sim — pode abrir uma 3ª página OU triggerar download direto
+        # Clica Sim — o site navega para certidao.asp
         btn_sim.click()
 
-        # Aguarda até 30s por qualquer captura
+        # Aguarda até 30s que alguma página chegue em certidao.asp
+        alvo = None
         for _ in range(30):
-            if all_downloads or attachment_bytes:
+            if _pagina_tem_certidao(popup):
+                alvo = popup
+                break
+            for np in novas_paginas:
+                if _pagina_tem_certidao(np):
+                    alvo = np
+                    break
+            if alvo:
                 break
             time.sleep(1)
 
-        # Tenta fechar o popup se ainda estiver aberto
+        if alvo is None:
+            if debug:
+                print(f"  Popup URL final: {popup.url}")
+                for np in novas_paginas:
+                    print(f"  Nova pag URL: {np.url}")
+            resultado["msg"] = "Pagina certidao.asp nao encontrada em 30s"
+            try:
+                popup.close()
+            except Exception:
+                pass
+            return resultado
+
+        # Certidao carregada — captura o HTML completo
+        try:
+            alvo.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass  # se nao chegar a networkidle, tenta mesmo assim
+
+        html = alvo.content()
+
+        if debug:
+            print(f"  Certidao capturada: {len(html)} bytes de {alvo.url}")
+
+        # Salva como .html (mas mantém extensão .asp como o original)
+        output_path.write_text(html, encoding="utf-8")
+
+        try:
+            alvo.close()
+        except Exception:
+            pass
         try:
             if not popup.is_closed():
                 popup.close()
         except Exception:
             pass
 
-        if all_downloads:
-            if debug:
-                print(f"  Salvando via Download object")
-            all_downloads[0].save_as(str(output_path))
-            resultado["status"] = "ok"
-            resultado["arquivo"] = str(output_path)
-            resultado["msg"] = "OK (download event)"
-        elif attachment_bytes:
-            if debug:
-                print(f"  Salvando via response body")
-            output_path.write_bytes(attachment_bytes[0])
-            resultado["status"] = "ok"
-            resultado["arquivo"] = str(output_path)
-            resultado["msg"] = "OK (response body)"
-        else:
-            resultado["msg"] = "Arquivo nao recebido em 30s"
+        resultado["status"] = "ok"
+        resultado["arquivo"] = str(output_path)
+        resultado["msg"] = "OK"
 
     except Exception as e:
         resultado["msg"] = str(e)
     finally:
-        # Remove listener de novas páginas para não acumular entre CNPJs
         try:
             context.remove_listener("page", _on_new_page)
         except Exception:
@@ -210,8 +204,7 @@ def main():
     ap.add_argument("--output",   default="")
     ap.add_argument("--apenas",   default="")
     ap.add_argument("--limite",   type=int, default=0)
-    ap.add_argument("--debug",    action="store_true",
-                    help="Exibe todas as respostas/downloads para diagnostico")
+    ap.add_argument("--debug",    action="store_true")
     args = ap.parse_args()
 
     empresa = EMPRESAS.get(args.empresa.upper())
@@ -233,8 +226,6 @@ def main():
     print(f"\n{'='*60}")
     print(f"  SEFAZ-GO — {empresa['nome']}")
     print(f"  Total: {len(lista)} CNPJs  |  Saida: {pasta}")
-    if args.debug:
-        print(f"  Modo DEBUG ativado")
     print(f"{'='*60}\n")
 
     try:
@@ -261,9 +252,6 @@ def main():
                 continue
 
             print(f"[{i:02d}/{len(lista)}] {tag} — {cnpj_num}", end=" ... ", flush=True)
-            if args.debug:
-                print()
-
             res = emitir_cnpj(pg, context, browser, cnpj_num, asp_path, debug=args.debug)
             resultados.append(res)
             print("OK" if res["status"] == "ok" else f"ERRO: {res['msg']}")
