@@ -89,26 +89,45 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
         if debug:
             print(f"  URL: {page.url}")
 
-        # ---- 2. Preenche CNPJ ----
-        campo = page.query_selector('input[placeholder="Informe o CNPJ"]')
-        if not campo:
-            resultado["msg"] = "Campo CNPJ nao encontrado"
+        # ---- 2. Aguarda SPA renderizar e preenche CNPJ ----
+        try:
+            page.wait_for_selector('input[placeholder="Informe o CNPJ"]', timeout=15000)
+        except Exception:
+            resultado["msg"] = "Campo CNPJ nao apareceu apos 15s"
             return resultado
-        campo.click()
-        campo.fill("")
-        campo.type(cnpj_num, delay=40)
+        time.sleep(1)
+
+        # Usa locator + fill() que dispara onChange do React corretamente
+        campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
+        campo_loc.click()
+        campo_loc.fill(cnpj_num)
         time.sleep(0.5)
 
+        if debug:
+            val = campo_loc.input_value()
+            print(f"  Valor preenchido: {val}")
+
         # ---- 3. Clica "Emitir Certidao" ----
-        btn_emitir = (
-            page.query_selector('button[type="submit"]:has-text("Emitir Certidão")')
-            or page.query_selector('button[type="submit"]')
-        )
+        # Tenta varios seletores para o botao submit
+        btn_emitir = None
+        for sel in [
+            'button[type="submit"]:has-text("Emitir Certidão")',
+            'button[type="submit"]:has-text("Emitir")',
+            'button:has-text("Emitir Certidão")',
+            'button[type="submit"]',
+        ]:
+            try:
+                loc = page.locator(sel).first
+                if loc.count() > 0:
+                    btn_emitir = loc
+                    break
+            except Exception:
+                pass
         if not btn_emitir:
             resultado["msg"] = "Botao Emitir Certidao nao encontrado"
             return resultado
         btn_emitir.click()
-        time.sleep(4)
+        time.sleep(5)
 
         if debug:
             print(f"  URL apos Emitir: {page.url}")
