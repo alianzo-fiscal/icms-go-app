@@ -164,13 +164,15 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
         except Exception:
             pass  # se nao chegar a networkidle, tenta mesmo assim
 
-        html = alvo.content()
-
         if debug:
-            print(f"  Certidao capturada: {len(html)} bytes de {alvo.url}")
+            print(f"  Certidao carregada: {alvo.url}")
 
-        # Salva como .html (mas mantém extensão .asp como o original)
-        output_path.write_text(html, encoding="utf-8")
+        # Salva como PDF
+        alvo.pdf(
+            path=str(output_path),
+            format="A4",
+            print_background=True,
+        )
 
         try:
             alvo.close()
@@ -244,7 +246,7 @@ def main():
         for i, item in enumerate(lista, 1):
             cnpj_num = _so_numeros(item["cnpj"])
             tag      = item["tag"]
-            asp_path = pasta / f"{tag}_{cnpj_num}.asp"
+            asp_path = pasta / f"{tag}_{cnpj_num}.pdf"
 
             if asp_path.exists():
                 print(f"[{i:02d}/{len(lista)}] {tag} — ja existe, pulando")
