@@ -284,6 +284,7 @@ def main():
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--output",   default="")
     ap.add_argument("--apenas",   default="")
+    ap.add_argument("--limite",   type=int, default=0)
     ap.add_argument("--debug",    action="store_true")
     args = ap.parse_args()
 
@@ -300,6 +301,8 @@ def main():
     lista = empresa["matrizes"]
     if args.apenas:
         lista = [c for c in lista if _so_numeros(c["cnpj"]) == _so_numeros(args.apenas)]
+    if args.limite > 0:
+        lista = lista[:args.limite]
 
     print(f"\n{'='*60}")
     print(f"  CND Federal (RFB) — {empresa['nome']}")
