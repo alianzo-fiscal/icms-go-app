@@ -133,26 +133,22 @@ def emitir_cnpj(page, context, cnpj_num: str, download_dir: Path, output_path: P
         popup.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(2)
 
-        # 5. Na nova aba, clica Sim para confirmar o contribuinte
-        #    → isso dispara o download do arquivo .asp
+        # 5. Na nova aba, clica Sim → dispara download do arquivo .asp
         btn_sim = popup.query_selector('#Certidao\\.ConfirmaNomeContribuinteSim')
         if not btn_sim:
             btn_sim = popup.query_selector('input[value="Sim"], button:has-text("Sim")')
-        
-        if btn_sim and btn_sim.is_visible():
-            btn_sim.click()
-            time.sleep(2)
 
-        popup.close()
-
-        # 6. Aguarda download na pasta configurada
-        arquivo = _wait_download(download_dir, timeout=30)
-        if not arquivo:
-            resultado["msg"] = "Download não ocorreu em 30s"
+        if not btn_sim or not btn_sim.is_visible():
+            resultado["msg"] = "Botão Sim não encontrado no popup"
+            popup.close()
             return resultado
 
-        # 7. Move para pasta de saída
-        shutil.move(str(arquivo), str(output_path))
+        # Captura o download disparado pelo clique em Sim
+        with popup.expect_download(timeout=30000) as dl_info:
+            btn_sim.click()
+        download = dl_info.value
+        download.save_as(str(output_path))
+        popup.close()
         resultado["status"] = "ok"
         resultado["arquivo"] = str(output_path)
         resultado["msg"] = "OK"
@@ -266,3 +262,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+                                                                           
