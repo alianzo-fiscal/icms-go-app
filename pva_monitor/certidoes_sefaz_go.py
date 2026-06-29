@@ -91,8 +91,12 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
             ct = resp.headers.get("content-type", "")
             if debug:
                 print(f"    [{label}] {resp.status} ct={ct[:50]} cd={cd[:50]} url={resp.url[:60]}")
-            if "attachment" in cd.lower() or "application/octet-stream" in ct.lower():
-                attachment_bytes.append(resp.body())
+            # SEFAZ-GO serve certidao.asp sem Content-Type/Content-Disposition
+        is_certidao = ("sefaz.go.gov.br" in resp.url and
+                       "certidao.asp" in resp.url and
+                       resp.status == 200)
+        if is_certidao or "attachment" in cd.lower() or "application/octet-stream" in ct.lower():
+            attachment_bytes.append(resp.body())
         except Exception:
             pass
 
