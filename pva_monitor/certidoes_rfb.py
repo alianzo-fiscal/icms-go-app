@@ -82,7 +82,8 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
 
     try:
         # ---- 1. Navega para o formulario CNPJ ----
-        page.goto(URL_RFB, timeout=30000, wait_until="networkidle")
+        page.goto(URL_RFB, timeout=60000, wait_until="load")
+        time.sleep(3)  # aguarda SPA renderizar
         time.sleep(2)
 
         if debug:
