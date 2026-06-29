@@ -330,20 +330,25 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=args.headless,
-            slow_mo=80,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        # Usa Google Chrome instalado (channel="chrome") para passar reCAPTCHA v3.
+        # O Chromium embutido do Playwright e detectado como bot e retorna erro 023.
+        # Fallback para chromium se Chrome nao estiver instalado.
+        try:
+            browser = p.chromium.launch(
+                channel="chrome",
+                headless=args.headless,
+                slow_mo=80,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        except Exception:
+            browser = p.chromium.launch(
+                headless=args.headless,
+                slow_mo=80,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
         context = browser.new_context(
             accept_downloads=True,
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
         )
-        # Mascara navigator.webdriver para evitar deteccao anti-bot
         context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
