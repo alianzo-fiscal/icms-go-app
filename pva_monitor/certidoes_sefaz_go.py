@@ -93,12 +93,12 @@ def emitir_cnpj(page, context, browser, cnpj_num, output_path, debug=False):
     context.on("page", _on_new_page)
 
     try:
-        page.goto(URL_SEFAZ_GO, timeout=20000, wait_until="domcontentloaded")
-        time.sleep(2)
+        page.goto(URL_SEFAZ_GO, timeout=30000, wait_until="networkidle")
+        time.sleep(3)
 
-        page.click('input[name="Certidao.TipoDocumento"][value="2"]', timeout=8000)
+        page.click('input[name="Certidao.TipoDocumento"][value="2"]', timeout=20000)
         time.sleep(0.4)
-        page.click('#Certidao\\.EspolioN', timeout=5000)
+        page.click('#Certidao\\.EspolioN', timeout=10000)
 
         campo = page.query_selector('input[id="Certidao.NumeroDocumentoCNPJ"]')
         if not campo:
