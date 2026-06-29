@@ -32,13 +32,35 @@ URL_RFB = "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj"
 DELAY_ENTRE = 5
 
 # Apenas CNPJ MATRIZES (branch 0001)
+# Extraido de Inscricoes 1.xlsx / INSCRICAO MUNICIPAL
 EMPRESAS = {
     "EDN": {
         "nome": "EDN Utilidades Domesticas",
         "matrizes": [
-            {"tag": "MATRIZ_EDN", "cnpj": "20758851000105"},
+            {"tag": "EDN_UTILIDADES_", "cnpj": "20758851000105", "razao": "EDN UTILIDADES DOMESTICAS"},
         ],
-    }
+    },
+    "GRUPO": {
+        "nome": "Grupo Alianzo — todas as matrizes",
+        "matrizes": [
+            {"tag": "AERO_PARTICIPAC", "cnpj": "53532326000126", "razao": "AERO PARTICIPACOES SPE LTDA"},
+            {"tag": "AGUIA_REPRESENT", "cnpj": "39584475000108", "razao": "AGUIA REPRESENTACOES E SERVICOS LTDA"},
+            {"tag": "ATACADAO_DO_LAR", "cnpj": "35917755000130", "razao": "ATACADAO DO LAR"},
+            {"tag": "BIG_ESTACIONAME", "cnpj": "35279422000122", "razao": "BIG ESTACIONAMENTO"},
+            {"tag": "CGV_EMPREENDIME", "cnpj": "23247575000109", "razao": "CGV EMPREENDIMENTOS"},
+            {"tag": "CLUB_BIG_DECOR_", "cnpj": "58177538000156", "razao": "CLUB BIG DECOR"},
+            {"tag": "COMERCIAL_DE_BR", "cnpj": "07515610000177", "razao": "COMERCIAL DE BRINQUEDOS CRISTAL"},
+            {"tag": "DN_ARMAZENAMENT", "cnpj": "28221185000183", "razao": "DN ARMAZENAMENTO E TRANSPORTES"},
+            {"tag": "DUARTE_E_NOGUEI", "cnpj": "33522354000155", "razao": "DUARTE E NOGUEIRA PARTICIPACOES"},
+            {"tag": "EDI_INVESTIMENT", "cnpj": "33606253000162", "razao": "EDI INVESTIMENTOS"},
+            {"tag": "EDN_UTILIDADES_", "cnpj": "20758851000105", "razao": "EDN UTILIDADES DOMESTICAS"},
+            {"tag": "EDP_PARTICIPACO", "cnpj": "33764688000135", "razao": "EDP PARTICIPACOES"},
+            {"tag": "KRISTAL_PARIS_G", "cnpj": "07877161000107", "razao": "KRISTAL PARIS GO COMERCIO DE OCULOS"},
+            {"tag": "R3_SUPRIMENTOS_", "cnpj": "10641901000116", "razao": "R3 Suprimentos Corporativos"},
+            {"tag": "RCI_INVESTIMENT", "cnpj": "33650317000122", "razao": "RCI INVESTIMENTOS"},
+            {"tag": "RDP_PARTICIPACO", "cnpj": "33522454000181", "razao": "RDP PARTICIPACOES"},
+        ],
+    },
 }
 
 
