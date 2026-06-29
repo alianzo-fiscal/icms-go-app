@@ -103,31 +103,22 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
             return resultado
         time.sleep(1)
 
-        # Preenche via AngularJS evaluate() — keyboard.type nao dispara ng-model
-        cnpj_fmt = _formata_cnpj(cnpj_num)
-        preenchido = page.evaluate("""(cnpj) => {
-            const input = document.querySelector('input[placeholder="Informe o CNPJ"]');
-            if (!input) return false;
-            try {
-                const ng = angular.element(input);
-                ng.val(cnpj);
-                ng.triggerHandler('input');
-                ng.triggerHandler('change');
-            } catch(e) {
-                const setter = Object.getOwnPropertyDescriptor(
-                    HTMLInputElement.prototype, 'value').set;
-                setter.call(input, cnpj);
-                input.dispatchEvent(new Event('input',  {bubbles: true}));
-                input.dispatchEvent(new Event('change', {bubbles: true}));
-            }
-            return input.value;
-        }""", cnpj_fmt)
+        # Preenche via keyboard.type() — Angular 2+ precisa de eventos reais de teclado
+        # para marcar o campo como ng-dirty/ng-touched e liberar o submit
+        campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
+        campo_loc.click()
+        page.keyboard.press("Control+a")
+        page.keyboard.press("Delete")
+        time.sleep(0.3)
+        # Digita CNPJ formatado (a mascara do portal aceita digitos puros também)
+        page.keyboard.type(cnpj_num, delay=60)
         time.sleep(0.8)
 
         if debug:
-            print(f"  Valor preenchido: {preenchido}")
+            val = campo_loc.input_value()
+            print(f"  Valor preenchido: {val}")
 
-        # ---- 3. Clica "Emitir Certidao" via JS (igual ao Chrome manual) ----
+        # ---- 3. Clica "Emitir Certidao" via JS (mais confiavel que Playwright click) ----
         page.evaluate("""() => {
             const btn = document.querySelector('button.br-button.primary.btn-acao')
                      || document.querySelector('button[type="submit"]');
