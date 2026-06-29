@@ -133,7 +133,18 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
         if debug:
             print(f"  URL apos Emitir: {page.url}")
 
-        # ---- 4. Verifica se apareceu modal de "Certidao Valida" ----
+        # ---- 4. Verifica erro do servidor (ex: erro 023) ----
+        erro_servidor = page.evaluate("""() => {
+            const el = document.querySelector(
+                '.br-message.warning, .br-message.danger, [class*="alert"][class*="warning"], [class*="alert"][class*="danger"]'
+            );
+            return el ? el.innerText.trim() : null;
+        }""")
+        if erro_servidor and any(x in erro_servidor for x in ["Não foi possível", "nao foi possivel", "tente novamente"]):
+            resultado["msg"] = f"Erro servidor RFB: {erro_servidor[:120]}"
+            return resultado
+
+        # ---- 5. Verifica se apareceu modal de "Certidao Valida" ----
         modal_texto = page.query_selector('text="Certidão Válida Encontrada"')
 
         if modal_texto:
