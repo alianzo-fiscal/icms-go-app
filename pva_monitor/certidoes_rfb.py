@@ -1,18 +1,25 @@
 # coding: utf-8
 """
-certidoes_rfb.py — Emissao em lote CND Federal (Receita Federal) via Playwright.
+certidoes_rfb.py — Emissao CND Federal (Receita Federal) via Playwright.
 
-URL: https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir
+IMPORTANTE: A Receita Federal so emite certidao para o CNPJ da MATRIZ.
+Todos os CNPJs filiais de uma mesma empresa compartilham UMA certidao.
+
+Novo portal (jul/2025): https://servicos.receitafederal.gov.br/servico/certidoes/
 
 Fluxo:
-  1. Preenche CNPJ e clica Consultar
-  2. Se aparecer "Emissao de nova certidao" -> clica -> captura PDF
-  3. Se ja existir certidao valida -> clica "Consulta / 2a via" -> captura PDF
+  1. Navega para #/home/cnpj
+  2. Preenche CNPJ da matriz e clica "Emitir Certidao"
+  3a. Modal "Certidao Valida Encontrada" -> clica "Consultar Certidao"
+       -> pagina /consultar -> clica "Consultar Certidao"
+       -> pagina /consultar/resultado -> clica icone 2a Via
+  3b. Sem modal -> certidao emitida diretamente (PDF abre/baixa)
+  4. Captura PDF via nova pagina ou download
 
 Uso:
-  python certidoes_rfb.py --empresa EDN --limite 5
+  python certidoes_rfb.py --empresa EDN
   python certidoes_rfb.py --empresa EDN --headless
-  python certidoes_rfb.py --empresa EDN --apenas 20758851000105
+  python certidoes_rfb.py --empresa EDN --debug
 """
 import sys
 import time
@@ -21,56 +28,15 @@ import json
 from pathlib import Path
 from datetime import date
 
-URL_RFB = "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/Emitir"
+URL_RFB = "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj"
 DELAY_ENTRE = 5
 
+# Apenas CNPJ MATRIZES (branch 0001)
 EMPRESAS = {
     "EDN": {
         "nome": "EDN Utilidades Domesticas",
-        "cnpjs": [
-            {"tag": "F003_URUACU",   "cnpj": "20758851004100"},
-            {"tag": "F004_APARECID", "cnpj": "20758851004283"},
-            {"tag": "F005_ITUMBIAR", "cnpj": "20758851004364"},
-            {"tag": "F007_TRINDADE", "cnpj": "20758851004526"},
-            {"tag": "F008_GOIANIA",  "cnpj": "20758851004798"},
-            {"tag": "F010_CALDAS_N", "cnpj": "20758851004607"},
-            {"tag": "F011_LUZIANIA", "cnpj": "20758851005093"},
-            {"tag": "F013_ITABERAI", "cnpj": "20758851005760"},
-            {"tag": "F016_GOIANIA",  "cnpj": "20758851001934"},
-            {"tag": "F018_GOIANIA",  "cnpj": "20758851002230"},
-            {"tag": "F020_GOIANIA",  "cnpj": "20758851003473"},
-            {"tag": "F024_GOIANIA",  "cnpj": "20758851001420"},
-            {"tag": "F025_INHUMAS",  "cnpj": "20758851003716"},
-            {"tag": "F026_ANAPOLIS", "cnpj": "20758851005689"},
-            {"tag": "F027_RIO_VERD", "cnpj": "20758851005174"},
-            {"tag": "F030_GOIANIRA", "cnpj": "20758851004011"},
-            {"tag": "F031_GOIANIA",  "cnpj": "20758851000105"},
-            {"tag": "F033_GOIANIA",  "cnpj": "20758851006065"},
-            {"tag": "F038_PORANGAT", "cnpj": "20758851005840"},
-            {"tag": "F048_ANAPOLIS", "cnpj": "20758851000296"},
-            {"tag": "F050_GOIANIA",  "cnpj": "20758851003554"},
-            {"tag": "F060_GOIANIA",  "cnpj": "20758851003635"},
-            {"tag": "F071_GOIANIA",  "cnpj": "20758851000962"},
-            {"tag": "F074_TRINDADE", "cnpj": "20758851001268"},
-            {"tag": "F076_SENADOR_", "cnpj": "20758851000709"},
-            {"tag": "F077_APARECID", "cnpj": "20758851000881"},
-            {"tag": "F079_GOIANIA",  "cnpj": "20758851001004"},
-            {"tag": "F080_GOIANESI", "cnpj": "20758851001187"},
-            {"tag": "F082_GOIANIA",  "cnpj": "20758851002310"},
-            {"tag": "F083_GOIANIA",  "cnpj": "20758851002582"},
-            {"tag": "F084_GOIANIA",  "cnpj": "20758851002400"},
-            {"tag": "F085_GOIANIA",  "cnpj": "20758851001349"},
-            {"tag": "F086_GOIANIA",  "cnpj": "20758851001772"},
-            {"tag": "F088_GOIANIA",  "cnpj": "20758851001500"},
-            {"tag": "F089_GOIANIA",  "cnpj": "20758851001853"},
-            {"tag": "F090_GOIANIA",  "cnpj": "20758851002159"},
-            {"tag": "F091_GOIANIA",  "cnpj": "20758851003201"},
-            {"tag": "F093_GOIANIA",  "cnpj": "20758851002744"},
-            {"tag": "F094_GOIANIA",  "cnpj": "20758851002825"},
-            {"tag": "F095_GOIANIA",  "cnpj": "20758851003040"},
-            {"tag": "F096_GOIANIA",  "cnpj": "20758851002906"},
-            {"tag": "F097_GOIANIA",  "cnpj": "20758851003120"},
-            {"tag": "F098_GOIANIA",  "cnpj": "20758851001691"},
+        "matrizes": [
+            {"tag": "MATRIZ_EDN", "cnpj": "20758851000105"},
         ],
     }
 }
@@ -80,10 +46,10 @@ def _so_numeros(s):
     return "".join(c for c in str(s) if c.isdigit())
 
 
-def _pagina_tem_certidao(pg, patterns=("certidao", "certidão", ".pdf")):
+def _pagina_em(pg, *partes):
     try:
         url = (pg.url or "").lower()
-        return not pg.is_closed() and any(p in url for p in patterns)
+        return not pg.is_closed() and any(p in url for p in partes)
     except Exception:
         return False
 
@@ -91,137 +57,190 @@ def _pagina_tem_certidao(pg, patterns=("certidao", "certidão", ".pdf")):
 def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
     resultado = {"cnpj": cnpj_num, "status": "erro", "arquivo": "", "msg": ""}
     novas_paginas = []
+    downloads = []
 
     def _on_new_page(np):
         novas_paginas.append(np)
+        np.on("download", lambda d: downloads.append(d))
+
+    def _on_download(dl):
+        downloads.append(dl)
 
     context.on("page", _on_new_page)
+    page.on("download", _on_download)
 
     try:
-        # ---- 1. Navega para o formulário ----
+        # ---- 1. Navega para o formulario CNPJ ----
         page.goto(URL_RFB, timeout=30000, wait_until="networkidle")
-        time.sleep(1)
+        time.sleep(2)
+
+        if debug:
+            print(f"  URL: {page.url}")
 
         # ---- 2. Preenche CNPJ ----
-        campo = page.query_selector('#NI')
+        campo = page.query_selector('input[placeholder="Informe o CNPJ"]')
         if not campo:
-            resultado["msg"] = "Campo CNPJ (#NI) nao encontrado"
+            resultado["msg"] = "Campo CNPJ nao encontrado"
             return resultado
         campo.click()
         campo.fill("")
-        campo.type(cnpj_num, delay=30)
-        time.sleep(0.3)
+        campo.type(cnpj_num, delay=40)
+        time.sleep(0.5)
 
-        # ---- 3. Clica Consultar ----
-        page.click('#validar', timeout=10000)
-        time.sleep(2)
-
-        # ---- 4. Analisa resultado ----
-        texto = ""
-        try:
-            el = page.query_selector('#rfb-main-container > div')
-            texto = el.inner_text() if el else ""
-        except Exception:
-            pass
+        # ---- 3. Clica "Emitir Certidao" ----
+        btn_emitir = (
+            page.query_selector('button[type="submit"]:has-text("Emitir Certidão")')
+            or page.query_selector('button[type="submit"]')
+        )
+        if not btn_emitir:
+            resultado["msg"] = "Botao Emitir Certidao nao encontrado"
+            return resultado
+        btn_emitir.click()
+        time.sleep(4)
 
         if debug:
-            print(f"  Texto resposta: {texto[:200]!r}")
+            print(f"  URL apos Emitir: {page.url}")
 
-        # Erros conhecidos
-        if "não foi encontrada" in texto:
-            resultado["msg"] = "CNPJ nao encontrado"
-            return resultado
-        if "são insuficientes" in texto:
-            resultado["msg"] = "Certidao Positiva (debitos)"
-            return resultado
+        # ---- 4. Verifica se apareceu modal de "Certidao Valida" ----
+        modal_texto = page.query_selector('text="Certidão Válida Encontrada"')
 
-        # ---- 5. Clica no link de emissão/2a via ----
-        link_emitir = (
-            page.query_selector('a:has-text("Emissão de nova certidão")')
-            or page.query_selector('a:has-text("Emissao de nova certidao")')
-            or page.query_selector('a:has-text("Consulta de certidão e emissão de 2ª via")')
-            or page.query_selector('a:has-text("Consulta de certidao")')
-            or page.query_selector('a[href*="certidao"]')
-        )
+        if modal_texto:
+            if debug:
+                print("  Modal 'Certidao Valida' detectado")
 
-        if not link_emitir:
-            # Pode estar na 2ª tela após emissao bem sucedida
-            link_emitir = (
-                page.query_selector('a:has-text("2ª via")')
-                or page.query_selector('a:has-text("2a via")')
+            # Clica "Consultar Certidao" no modal (botao outline/secundario)
+            # Ha dois botoes: "Consultar Certidao" e "Emitir Nova Certidao"
+            # Queremos o primeiro (Consultar)
+            btns = page.query_selector_all('button:has-text("Consultar Certidão")')
+            btn_consultar_modal = btns[0] if btns else None
+
+            if not btn_consultar_modal:
+                # Tenta texto alternativo
+                btn_consultar_modal = page.query_selector('button:has-text("Consultar")')
+
+            if not btn_consultar_modal:
+                resultado["msg"] = "Botao Consultar nao encontrado no modal"
+                return resultado
+
+            btn_consultar_modal.click()
+            time.sleep(3)
+
+            if debug:
+                print(f"  URL apos Consultar modal: {page.url}")
+
+            # ---- 5. Pagina /consultar — clica "Consultar Certidao" ----
+            page.wait_for_url("**/cnpj/consultar**", timeout=10000)
+            time.sleep(1)
+
+            btn_consultar_pg = page.query_selector('button:has-text("Consultar Certidão")')
+            if not btn_consultar_pg:
+                btn_consultar_pg = page.query_selector('button:has-text("Consultar")')
+
+            if not btn_consultar_pg:
+                resultado["msg"] = "Botao Consultar na pagina /consultar nao encontrado"
+                return resultado
+
+            btn_consultar_pg.click()
+            time.sleep(4)
+
+            if debug:
+                print(f"  URL apos Consultar pag: {page.url}")
+
+            # ---- 6. Pagina /resultado — clica icone 2a Via (1a linha) ----
+            page.wait_for_url("**/consultar/resultado**", timeout=10000)
+            time.sleep(1)
+
+            # O icone de download fica na ultima coluna "2a Via" da primeira linha
+            btn_2avia = (
+                page.query_selector('table tbody tr:first-child td:last-child a')
+                or page.query_selector('table tbody tr:first-child td:last-child button')
+                or page.query_selector('tbody tr:first-child .br-button')
+                or page.query_selector('tbody tr:first-child [aria-label*="Via"]')
+                or page.query_selector('tbody tr:first-child [title*="via"]')
             )
 
-        if not link_emitir:
-            resultado["msg"] = f"Link de emissao nao encontrado. Texto={texto[:120]}"
-            return resultado
+            if not btn_2avia:
+                # Fallback: procura qualquer botao/link de download na tabela
+                btn_2avia = page.query_selector('tbody tr:first-child a[download], tbody tr:first-child button[download]')
 
-        link_emitir.click()
-        time.sleep(2)
+            if not btn_2avia:
+                resultado["msg"] = "Icone 2a Via nao encontrado na tabela de resultados"
+                return resultado
 
-        # ---- 6. Aguarda nova página com a certidão ----
+            if debug:
+                print(f"  Clicando 2a Via...")
+
+            btn_2avia.click()
+            time.sleep(5)
+
+        else:
+            # Sem modal: certidao foi emitida diretamente ou outro fluxo
+            if debug:
+                print("  Sem modal — verificando download/nova pagina direta")
+            time.sleep(5)
+
+        # ---- 7. Captura o resultado (nova pagina ou download) ----
         alvo = None
-        for _ in range(30):
-            if _pagina_tem_certidao(page):
-                alvo = page
-                break
-            for np in novas_paginas:
-                if _pagina_tem_certidao(np):
-                    alvo = np
-                    break
-            if alvo:
-                break
-            # Também verifica se a página principal navegou para certidao
+
+        # Verifica nova pagina
+        for np in novas_paginas:
             try:
-                cur = page.url.lower()
-                if "certidao" in cur or ".pdf" in cur:
-                    alvo = page
+                if not np.is_closed():
+                    np.wait_for_load_state("networkidle", timeout=10000)
+                    alvo = np
                     break
             except Exception:
                 pass
-            time.sleep(1)
 
-        if alvo is None:
-            # Se não encontrou por URL, tenta pegar qualquer nova página aberta
-            if novas_paginas:
-                alvo = novas_paginas[-1]
-                try:
-                    alvo.wait_for_load_state("networkidle", timeout=15000)
-                except Exception:
-                    pass
-            else:
-                resultado["msg"] = "Pagina da certidao nao encontrada em 30s"
-                return resultado
+        # Se download foi detectado
+        if downloads and not alvo:
+            dl = downloads[0]
+            dl.save_as(str(output_path))
+            resultado["status"] = "ok"
+            resultado["arquivo"] = str(output_path)
+            resultado["msg"] = "OK (download)"
+            return resultado
 
-        try:
-            alvo.wait_for_load_state("networkidle", timeout=15000)
-        except Exception:
-            pass
-
-        if debug:
-            print(f"  Certidao URL: {alvo.url}")
-
-        # ---- 7. Salva como PDF ----
-        alvo.pdf(
-            path=str(output_path),
-            format="A4",
-            print_background=True,
-        )
-
-        try:
-            if alvo != page and not alvo.is_closed():
+        # Se nova pagina
+        if alvo:
+            if debug:
+                print(f"  Nova pagina URL: {alvo.url}")
+            try:
+                alvo.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            alvo.pdf(path=str(output_path), format="A4", print_background=True)
+            try:
                 alvo.close()
-        except Exception:
-            pass
+            except Exception:
+                pass
+            resultado["status"] = "ok"
+            resultado["arquivo"] = str(output_path)
+            resultado["msg"] = "OK (nova pagina)"
+            return resultado
 
-        resultado["status"] = "ok"
-        resultado["arquivo"] = str(output_path)
-        resultado["msg"] = "OK"
+        # Verifica se a propria pagina principal exibe a certidao
+        cur_url = page.url.lower()
+        if "certidao" in cur_url and "resultado" not in cur_url:
+            if debug:
+                print(f"  Pagina principal tem certidao: {page.url}")
+            page.pdf(path=str(output_path), format="A4", print_background=True)
+            resultado["status"] = "ok"
+            resultado["arquivo"] = str(output_path)
+            resultado["msg"] = "OK (pagina principal)"
+            return resultado
+
+        resultado["msg"] = "Certidao nao capturada (sem download nem nova pagina)"
 
     except Exception as e:
         resultado["msg"] = str(e)
     finally:
         try:
             context.remove_listener("page", _on_new_page)
+        except Exception:
+            pass
+        try:
+            page.remove_listener("download", _on_download)
         except Exception:
             pass
 
@@ -234,7 +253,6 @@ def main():
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--output",   default="")
     ap.add_argument("--apenas",   default="")
-    ap.add_argument("--limite",   type=int, default=0)
     ap.add_argument("--debug",    action="store_true")
     args = ap.parse_args()
 
@@ -248,15 +266,13 @@ def main():
     pasta.mkdir(parents=True, exist_ok=True)
     log_path = pasta / "log.json"
 
-    lista = empresa["cnpjs"]
+    lista = empresa["matrizes"]
     if args.apenas:
         lista = [c for c in lista if _so_numeros(c["cnpj"]) == _so_numeros(args.apenas)]
-    if args.limite > 0:
-        lista = lista[:args.limite]
 
     print(f"\n{'='*60}")
     print(f"  CND Federal (RFB) — {empresa['nome']}")
-    print(f"  Total: {len(lista)} CNPJs  |  Saida: {pasta}")
+    print(f"  Total: {len(lista)} matrizes  |  Saida: {pasta}")
     print(f"{'='*60}\n")
 
     try:
@@ -268,7 +284,7 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=args.headless, slow_mo=50)
+        browser = p.chromium.launch(headless=args.headless, slow_mo=80)
         context = browser.new_context(accept_downloads=True)
         pg      = context.new_page()
 
