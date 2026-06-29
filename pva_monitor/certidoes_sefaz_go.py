@@ -1,15 +1,12 @@
 # coding: utf-8
 """
-certidoes_sefaz_go.py — Emissão em lote da Certidão de Débitos SEFAZ-GO.
+certidoes_sefaz_go.py — Emissao em lote SEFAZ-GO via Playwright.
 
-Fluxo correto:
-  1. Navega para sefaz.go.gov.br/certidao/emissao/
-  2. Seleciona radio CNPJ
-  3. Preenche CNPJ
-  4. Marca Espolio = Nao
-  5. Clica Emitir -> abre popup com confirmacao
-  6. Na popup, clica Sim -> dispara download do arquivo .asp
-  7. Salva o arquivo na pasta de saida
+Fluxo:
+  1. Preenche formulario SEFAZ-GO
+  2. Clica Emitir -> popup de confirmacao
+  3. Intercepta resposta de rede no popup (Content-Disposition: attachment)
+  4. Salva o arquivo .asp na pasta de saida
 
 Uso:
   python certidoes_sefaz_go.py --empresa EDN
@@ -106,7 +103,7 @@ def emitir_cnpj(page, context, cnpj_num, output_path):
         campo.type(cnpj_num, delay=30)
         time.sleep(0.4)
 
-        # Clica Emitir -> abre popup de confirmacao
+        # Clica Emitir -> popup de confirmacao
         with context.expect_page() as popup_info:
             page.click('input[type="submit"][value="Emitir"]', timeout=5000)
 
@@ -114,24 +111,45 @@ def emitir_cnpj(page, context, cnpj_num, output_path):
         popup.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(2)
 
-        # Localiza botao Sim no popup
+        # Intercepta a resposta de rede que contem o arquivo
+        file_bytes = []
+
+        def on_response(response):
+            try:
+                cd = response.headers.get("content-disposition", "")
+                ct = response.headers.get("content-type", "")
+                if "attachment" in cd.lower() or "application/octet-stream" in ct.lower():
+                    file_bytes.append(response.body())
+            except Exception:
+                pass
+
+        popup.on("response", on_response)
+
+        # Localiza e clica Sim
         btn_sim = popup.query_selector('#Certidao\\.ConfirmaNomeContribuinteSim')
         if not btn_sim:
             btn_sim = popup.query_selector('input[value="Sim"]')
 
         if not btn_sim or not btn_sim.is_visible():
-            resultado["msg"] = "Botao Sim nao encontrado no popup"
+            resultado["msg"] = "Botao Sim nao encontrado"
             popup.close()
             return resultado
 
-        # Clica Sim -> dispara download do arquivo .asp
-        with popup.expect_download(timeout=30000) as dl_info:
-            btn_sim.click()
+        btn_sim.click()
 
-        download = dl_info.value
-        download.save_as(str(output_path))
+        # Aguarda ate 30s pela resposta com o arquivo
+        for _ in range(30):
+            if file_bytes:
+                break
+            time.sleep(1)
+
         popup.close()
 
+        if not file_bytes:
+            resultado["msg"] = "Arquivo nao recebido em 30s"
+            return resultado
+
+        output_path.write_bytes(file_bytes[0])
         resultado["status"] = "ok"
         resultado["arquivo"] = str(output_path)
         resultado["msg"] = "OK"
@@ -175,7 +193,7 @@ def main():
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("Playwright nao instalado. Execute: pip install playwright")
+        print("Playwright nao instalado.")
         sys.exit(1)
 
     resultados = []
@@ -192,14 +210,12 @@ def main():
 
             if asp_path.exists():
                 print(f"[{i:02d}/{len(lista)}] {tag} — ja existe, pulando")
-                resultados.append({"cnpj": cnpj_num, "status": "pulado", "arquivo": "", "msg": "ja existia"})
+                resultados.append({"cnpj": cnpj_num, "status": "pulado", "msg": "ja existia"})
                 continue
 
             print(f"[{i:02d}/{len(lista)}] {tag} — {cnpj_num}", end=" ... ", flush=True)
-
             res = emitir_cnpj(page, context, cnpj_num, asp_path)
             resultados.append(res)
-
             print("OK" if res["status"] == "ok" else f"ERRO: {res['msg']}")
 
             if i < len(lista):
