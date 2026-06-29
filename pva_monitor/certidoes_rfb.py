@@ -57,6 +57,12 @@ def _so_numeros(s):
     return "".join(c for c in str(s) if c.isdigit())
 
 
+def _formata_cnpj(cnpj_num):
+    """28221185000183 -> 28.221.185/0001-83"""
+    d = cnpj_num.zfill(14)
+    return f"{d[0:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:14]}"
+
+
 def _pagina_em(pg, *partes):
     try:
         url = (pg.url or "").lower()
@@ -97,56 +103,41 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
             return resultado
         time.sleep(1)
 
-        # Preenche via keyboard.type() para disparar eventos React (onChange/onInput)
-        campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
-        campo_loc.click()
-        # Limpa campo com Ctrl+A + Delete antes de digitar
-        page.keyboard.press("Control+a")
-        page.keyboard.press("Delete")
-        time.sleep(0.3)
-        page.keyboard.type(cnpj_num, delay=60)
+        # Preenche via AngularJS evaluate() — keyboard.type nao dispara ng-model
+        cnpj_fmt = _formata_cnpj(cnpj_num)
+        preenchido = page.evaluate("""(cnpj) => {
+            const input = document.querySelector('input[placeholder="Informe o CNPJ"]');
+            if (!input) return false;
+            try {
+                const ng = angular.element(input);
+                ng.val(cnpj);
+                ng.triggerHandler('input');
+                ng.triggerHandler('change');
+            } catch(e) {
+                const setter = Object.getOwnPropertyDescriptor(
+                    HTMLInputElement.prototype, 'value').set;
+                setter.call(input, cnpj);
+                input.dispatchEvent(new Event('input',  {bubbles: true}));
+                input.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            return input.value;
+        }""", cnpj_fmt)
         time.sleep(0.8)
 
         if debug:
-            val = campo_loc.input_value()
-            print(f"  Valor preenchido: {val}")
+            print(f"  Valor preenchido: {preenchido}")
 
-        # ---- 3. Clica "Emitir Certidao" ----
-        # Tenta via locator com texto exato, depois fallback para submit
-        btn_emitir = None
-        for sel in [
-            'button:has-text("Emitir Certidão")',
-            'button:has-text("Emitir Certidao")',
-            'button[type="submit"]:has-text("Emitir")',
-            'button[type="submit"]',
-        ]:
-            try:
-                loc = page.locator(sel).first
-                if loc.count() > 0:
-                    btn_emitir = loc
-                    if debug:
-                        print(f"  Botao encontrado: {sel!r}")
-                    break
-            except Exception:
-                pass
-
-        if btn_emitir:
-            btn_emitir.click()
-        else:
-            # Fallback: tecla Enter no campo (submete o form)
-            if debug:
-                print("  Botao nao encontrado — tentando Enter no campo")
-            campo_loc.press("Enter")
+        # ---- 3. Clica "Emitir Certidao" via JS (igual ao Chrome manual) ----
+        page.evaluate("""() => {
+            const btn = document.querySelector('button.br-button.primary.btn-acao')
+                     || document.querySelector('button[type="submit"]');
+            if (btn) btn.click();
+        }""")
         time.sleep(6)
 
         if debug:
-            # Mostra mensagens de erro visiveis na pagina
-            erros = page.locator('[class*="erro"], [class*="error"], [class*="alert"], [role="alert"]')
-            for i in range(erros.count()):
-                try:
-                    print(f"  Msg pagina: {erros.nth(i).inner_text()[:120]}")
-                except Exception:
-                    pass
+            hash_url = page.evaluate("() => window.location.hash")
+            print(f"  Hash apos Emitir: {hash_url}")
 
         if debug:
             print(f"  URL apos Emitir: {page.url}")
