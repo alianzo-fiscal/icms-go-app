@@ -97,37 +97,56 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
             return resultado
         time.sleep(1)
 
-        # Usa locator + fill() que dispara onChange do React corretamente
+        # Preenche via keyboard.type() para disparar eventos React (onChange/onInput)
         campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
         campo_loc.click()
-        campo_loc.fill(cnpj_num)
-        time.sleep(0.5)
+        # Limpa campo com Ctrl+A + Delete antes de digitar
+        page.keyboard.press("Control+a")
+        page.keyboard.press("Delete")
+        time.sleep(0.3)
+        page.keyboard.type(cnpj_num, delay=60)
+        time.sleep(0.8)
 
         if debug:
             val = campo_loc.input_value()
             print(f"  Valor preenchido: {val}")
 
         # ---- 3. Clica "Emitir Certidao" ----
-        # Tenta varios seletores para o botao submit
+        # Tenta via locator com texto exato, depois fallback para submit
         btn_emitir = None
         for sel in [
-            'button[type="submit"]:has-text("Emitir Certidão")',
-            'button[type="submit"]:has-text("Emitir")',
             'button:has-text("Emitir Certidão")',
+            'button:has-text("Emitir Certidao")',
+            'button[type="submit"]:has-text("Emitir")',
             'button[type="submit"]',
         ]:
             try:
                 loc = page.locator(sel).first
                 if loc.count() > 0:
                     btn_emitir = loc
+                    if debug:
+                        print(f"  Botao encontrado: {sel!r}")
                     break
             except Exception:
                 pass
-        if not btn_emitir:
-            resultado["msg"] = "Botao Emitir Certidao nao encontrado"
-            return resultado
-        btn_emitir.click()
-        time.sleep(5)
+
+        if btn_emitir:
+            btn_emitir.click()
+        else:
+            # Fallback: tecla Enter no campo (submete o form)
+            if debug:
+                print("  Botao nao encontrado — tentando Enter no campo")
+            campo_loc.press("Enter")
+        time.sleep(6)
+
+        if debug:
+            # Mostra mensagens de erro visiveis na pagina
+            erros = page.locator('[class*="erro"], [class*="error"], [class*="alert"], [role="alert"]')
+            for i in range(erros.count()):
+                try:
+                    print(f"  Msg pagina: {erros.nth(i).inner_text()[:120]}")
+                except Exception:
+                    pass
 
         if debug:
             print(f"  URL apos Emitir: {page.url}")
