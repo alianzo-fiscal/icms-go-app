@@ -330,8 +330,23 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=args.headless, slow_mo=80)
-        context = browser.new_context(accept_downloads=True)
+        browser = p.chromium.launch(
+            headless=args.headless,
+            slow_mo=80,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        context = browser.new_context(
+            accept_downloads=True,
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+        )
+        # Mascara navigator.webdriver para evitar deteccao anti-bot
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
         pg      = context.new_page()
 
         for i, item in enumerate(lista, 1):
