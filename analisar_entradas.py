@@ -60,7 +60,21 @@ def carregar_dados(caminhos):
                     print(f"  Aviso: não foi possível ler {p.name} como CSV")
                     continue
             else:
-                d = pd.read_excel(p, dtype=str)
+                d = None
+                engines = (['openpyxl'] if p.suffix.lower() == '.xlsx' else []) + \
+                          (['xlrd']    if p.suffix.lower() == '.xls'  else []) + \
+                          ['openpyxl', 'xlrd']
+                last_err = None
+                for eng in dict.fromkeys(engines):  # mantém ordem, remove duplicatas
+                    try:
+                        d = pd.read_excel(p, dtype=str, engine=eng)
+                        break
+                    except Exception as ex:
+                        last_err = ex
+                        continue
+                if d is None:
+                    print(f"  Aviso: {p.name}: {last_err}")
+                    continue
             d.columns = [x.strip().upper() for x in d.columns]
             d['_arquivo'] = p.name
             dfs.append(d)
