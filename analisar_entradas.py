@@ -707,8 +707,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-   print(f'  Word:  {caminho_word}')
-
-
-if __name__ == '__main__':
-    main()
