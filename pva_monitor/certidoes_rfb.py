@@ -273,75 +273,44 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        # Conecta ao Chrome real via CDP (porta 9222) para usar cookies/sessao reais
-        # e passar o reCAPTCHA v3 do portal RFB (que bloqueia Chromium limpo com erro 023).
-        #
-        # Para iniciar o Chrome com depuracao remota, execute UMA VEZ antes de rodar este script:
-        #   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
-        #
-        # Se o Chrome nao estiver disponivel na porta 9222, abre um Chrome novo (sem cookies).
-        import subprocess, socket
+        # Usa launch_persistent_context com o perfil REAL do Chrome do usuario.
+        # Isso carrega cookies, historico e sessao reCAPTCHA — essencial para passar
+        # o reCAPTCHA v3 do portal RFB (que bloqueia browsers limpos com erro 023).
+        import os
 
-        def _chrome_disponivel():
-            try:
-                s = socket.create_connection(("127.0.0.1", 9222), timeout=1)
-                s.close()
-                return True
-            except Exception:
-                return False
+        # Perfil padrao do Chrome no Windows
+        chrome_profile = os.path.expandvars(
+            r"%LOCALAPPDATA%\Google\Chrome\User Data"
+        )
 
-        browser = None
-        cdp_mode = False
-
-        if _chrome_disponivel():
-            try:
-                browser = p.chromium.connect_over_cdp("http://localhost:9222")
-                cdp_mode = True
-                print("  [Chrome CDP] Conectado ao Chrome real na porta 9222")
-            except Exception as e:
-                print(f"  [Chrome CDP] Falha ao conectar: {e}")
-
-        if not browser:
-            # Tenta abrir Chrome com depuracao
-            chrome_paths = [
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                r"C:\Users\Alianzo\AppData\Local\Google\Chrome\Application\chrome.exe",
-            ]
-            chrome_exe = next((p_ for p_ in chrome_paths if __import__("os").path.exists(p_)), None)
-            if chrome_exe:
-                subprocess.Popen([
-                    chrome_exe,
-                    "--remote-debugging-port=9222",
+        try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=chrome_profile,
+                channel="chrome",
+                headless=args.headless,
+                slow_mo=80,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
                     "--no-default-browser-check",
-                ])
-                time.sleep(4)
-                try:
-                    browser = p.chromium.connect_over_cdp("http://localhost:9222")
-                    cdp_mode = True
-                    print("  [Chrome CDP] Chrome iniciado e conectado")
-                except Exception:
-                    pass
-
-        if not browser:
-            # Ultimo recurso: Chromium padrao
+                ],
+                accept_downloads=True,
+            )
+            print("  [Chrome] Usando perfil real do Chrome (com cookies/sessao)")
+        except Exception as e:
+            print(f"  [Chrome] Perfil ocupado ou erro ({e}) — usando contexto limpo")
             browser = p.chromium.launch(
                 channel="chrome",
                 headless=args.headless,
                 slow_mo=80,
                 args=["--disable-blink-features=AutomationControlled"],
             )
-
-        if cdp_mode:
-            context = browser.contexts[0] if browser.contexts else browser.new_context(accept_downloads=True)
-            pg = context.new_page()
-        else:
             context = browser.new_context(accept_downloads=True)
             context.add_init_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
-            pg = context.new_page()
+
+        pg = context.new_page()
 
         for i, item in enumerate(lista, 1):
             cnpj_num = _so_numeros(item["cnpj"])
@@ -364,7 +333,10 @@ def main():
             if i < len(lista):
                 time.sleep(DELAY_ENTRE)
 
-        browser.close()
+        try:
+            context.close()
+        except Exception:
+            pass
 
     log_path.write_text(json.dumps(resultados, ensure_ascii=False, indent=2), encoding="utf-8")
     ok  = sum(1 for r in resultados if r["status"] == "ok")
