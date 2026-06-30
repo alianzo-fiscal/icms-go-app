@@ -293,6 +293,10 @@ def main():
                     "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
                     "--no-default-browser-check",
+                    "--no-restore-last-session",          # nao mostra "Restaurar paginas?"
+                    "--disable-session-crashed-bubble",   # suprime popup de crash
+                    "--hide-crash-restore-bubble",        # Chrome 116+
+                    "--suppress-message-center-popups",
                 ],
                 accept_downloads=True,
             )
