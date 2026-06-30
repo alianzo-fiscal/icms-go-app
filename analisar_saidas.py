@@ -663,14 +663,18 @@ def main():
     caminho_excel = PASTA_SAIDA / f"Analise Saidas ICMS GO - {periodo}.xlsx"
     caminho_word  = PASTA_SAIDA / f"Analise Saidas ICMS GO - {periodo}.docx"
 
-    print(f"Gerando Excel: {caminho_excel.name}")
+    print(f"Gerando Excel: {caminho_excel}")
     gerar_excel(df, divs, grp, periodo, caminho_excel)
 
-    print(f"Gerando Word: {caminho_word.name}")
+    print(f"Gerando Word: {caminho_word}")
     gerar_word(df, divs, periodo, caminho_word)
 
-    print("Concluído!")
-    print(f"  Excel: {caminho_excel}")
+    print("Concluido!")
+
+
+if __name__ == "__main__":
+    main()
+_excel}")
     print(f"  Word:  {caminho_word}")
 
 
