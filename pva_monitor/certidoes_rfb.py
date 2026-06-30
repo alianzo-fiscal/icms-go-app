@@ -258,6 +258,11 @@ def main():
     options = uc.ChromeOptions()
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-extensions")          # evita popup/restart de extensoes
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--disable-notifications")
+    options.add_argument("--no-restore-last-session")
+    options.add_argument("--disable-session-crashed-bubble")
     if args.headless:
         options.add_argument("--headless=new")
 
