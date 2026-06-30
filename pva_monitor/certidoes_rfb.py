@@ -96,6 +96,13 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
 
     page.on("response", _on_response)
 
+    # Aplica stealth para mascarar sinais de automacao (reCAPTCHA v3)
+    try:
+        from playwright_stealth import stealth_sync
+        stealth_sync(page)
+    except ImportError:
+        pass  # fallback: continua sem stealth
+
     try:
         # 1. Navega
         page.goto(URL_RFB, timeout=60000, wait_until="load")
