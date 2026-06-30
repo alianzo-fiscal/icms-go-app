@@ -4,6 +4,7 @@ Análise de Entradas ICMS/GO — gera Excel (.xlsx) e Word (.docx)
 Uso: python analisar_entradas.py <arquivo1.xls> [arquivo2.csv] ...
 """
 
+from __future__ import annotations
 import sys
 import datetime
 from pathlib import Path
