@@ -69,8 +69,7 @@ def carregar_dados(caminhos):
             print(f"  Aviso: {p.name}: {e}")
 
     if not dfs:
-        print("Erro: nenhum arquivo pôde ser lido.")
-        sys.exit(1)
+        raise ValueError("Nenhum arquivo pôde ser lido. Verifique o formato (XLS/XLSX/CSV).")
 
     df = pd.concat(dfs, ignore_index=True)
 
@@ -94,6 +93,10 @@ def carregar_dados(caminhos):
     if 'CST' in df.columns:
         df['CST'] = df['CST'].str.zfill(2)
     df['PERCICMS'] = pd.to_numeric(df['PERCICMS'], errors='coerce').fillna(0).round(2)
+
+    # Garantir VLCONTABIL — fallback para VLITEM se ausente
+    if 'VLCONTABIL' not in df.columns:
+        df['VLCONTABIL'] = df['VLITEM'] if 'VLITEM' in df.columns else 0.0
 
     df['TIPO_OP'] = 'Intraestadual'
     mask_inter = (
