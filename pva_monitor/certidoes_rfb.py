@@ -283,6 +283,13 @@ def main():
             r"%LOCALAPPDATA%\Google\Chrome\User Data"
         )
 
+        # Fecha Chrome antes de abrir com perfil persistente
+        # (perfil fica travado enquanto Chrome esta aberto)
+        import subprocess as _sp
+        _sp.run(["taskkill", "/F", "/IM", "chrome.exe"], capture_output=True)
+        time.sleep(2)
+        print("  [Chrome] Chrome encerrado, abrindo com perfil de automacao...")
+
         try:
             context = p.chromium.launch_persistent_context(
                 user_data_dir=chrome_profile,
