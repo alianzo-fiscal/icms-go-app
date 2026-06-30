@@ -72,30 +72,38 @@ def _pagina_em(pg, *partes):
 
 
 def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
+    """
+    Fluxo RFB (requer Google Chrome via channel='chrome' para passar reCAPTCHA v3):
+      1. Navega #/home/cnpj → preenche CNPJ via teclado → Emitir via JS
+      2. Modal "Certidao Valida" → Consultar Certidao → /consultar
+      3. /consultar → Consultar Certidao → /consultar/resultado
+      4. /resultado → button[title='Segunda via'] → intercepta /seg-via/ → base64 PDF
+    """
     resultado = {"cnpj": cnpj_num, "status": "erro", "arquivo": "", "msg": ""}
-    novas_paginas = []
-    downloads = []
+    pdf_base64 = []
 
-    def _on_new_page(np):
-        novas_paginas.append(np)
-        np.on("download", lambda d: downloads.append(d))
+    def _on_response(resp):
+        if "seg-via" in resp.url and resp.status == 200:
+            try:
+                import base64 as _b64, json as _json
+                body = resp.body()
+                data = _json.loads(body)
+                b64 = data.get("pdf", "")
+                if b64:
+                    pdf_base64.append(b64)
+            except Exception:
+                pass
 
-    def _on_download(dl):
-        downloads.append(dl)
-
-    context.on("page", _on_new_page)
-    page.on("download", _on_download)
+    page.on("response", _on_response)
 
     try:
-        # ---- 1. Navega para o formulario CNPJ ----
+        # 1. Navega
         page.goto(URL_RFB, timeout=60000, wait_until="load")
-        time.sleep(3)  # aguarda SPA renderizar
-        time.sleep(2)
-
+        time.sleep(3)
         if debug:
             print(f"  URL: {page.url}")
 
-        # ---- 2. Aguarda SPA renderizar e preenche CNPJ ----
+        # 2. Preenche CNPJ via teclado (Angular 2+ precisa de eventos reais)
         try:
             page.wait_for_selector('input[placeholder="Informe o CNPJ"]', timeout=15000)
         except Exception:
@@ -103,22 +111,18 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
             return resultado
         time.sleep(1)
 
-        # Preenche via keyboard.type() — Angular 2+ precisa de eventos reais de teclado
-        # para marcar o campo como ng-dirty/ng-touched e liberar o submit
         campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
         campo_loc.click()
         page.keyboard.press("Control+a")
         page.keyboard.press("Delete")
         time.sleep(0.3)
-        # Digita CNPJ formatado (a mascara do portal aceita digitos puros também)
         page.keyboard.type(cnpj_num, delay=60)
         time.sleep(0.8)
 
         if debug:
-            val = campo_loc.input_value()
-            print(f"  Valor preenchido: {val}")
+            print(f"  Valor preenchido: {campo_loc.input_value()}")
 
-        # ---- 3. Clica "Emitir Certidao" via JS (mais confiavel que Playwright click) ----
+        # 3. Emitir via JS
         page.evaluate("""() => {
             const btn = document.querySelector('button.br-button.primary.btn-acao')
                      || document.querySelector('button[type="submit"]');
@@ -127,163 +131,102 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
         time.sleep(6)
 
         if debug:
-            hash_url = page.evaluate("() => window.location.hash")
-            print(f"  Hash apos Emitir: {hash_url}")
+            print(f"  Hash apos Emitir: {page.evaluate('() => window.location.hash')}")
 
-        if debug:
-            print(f"  URL apos Emitir: {page.url}")
-
-        # ---- 4. Verifica erro do servidor (ex: erro 023) ----
-        erro_servidor = page.evaluate("""() => {
-            const el = document.querySelector(
-                '.br-message.warning, .br-message.danger, [class*="alert"][class*="warning"], [class*="alert"][class*="danger"]'
-            );
+        # Detecta erro 023
+        erro_msg = page.evaluate("""() => {
+            const el = document.querySelector('[class*="br-message"], [role="alert"]');
             return el ? el.innerText.trim() : null;
         }""")
-        if erro_servidor and any(x in erro_servidor for x in ["Não foi possível", "nao foi possivel", "tente novamente"]):
-            resultado["msg"] = f"Erro servidor RFB: {erro_servidor[:120]}"
+        if erro_msg and any(x in erro_msg for x in ["Não foi possível", "tente novamente", "023"]):
+            resultado["msg"] = f"Erro RFB 023 (reCAPTCHA) — use channel=chrome: {erro_msg[:80]}"
             return resultado
 
-        # ---- 5. Verifica se apareceu modal de "Certidao Valida" ----
-        modal_texto = page.query_selector('text="Certidão Válida Encontrada"')
+        # 4. Modal "Certidao Valida" → Consultar
+        modal_ok = page.evaluate("""() => {
+            return !![...document.querySelectorAll('*')].find(
+                el => el.innerText && el.innerText.includes('Certidão Válida'));
+        }""")
 
-        if modal_texto:
-            if debug:
-                print("  Modal 'Certidao Valida' detectado")
+        if not modal_ok:
+            resultado["msg"] = "Modal Certidao Valida nao apareceu"
+            return resultado
 
-            # Clica "Consultar Certidao" no modal (botao outline/secundario)
-            # Ha dois botoes: "Consultar Certidao" e "Emitir Nova Certidao"
-            # Queremos o primeiro (Consultar)
-            btns = page.query_selector_all('button:has-text("Consultar Certidão")')
-            btn_consultar_modal = btns[0] if btns else None
+        if debug:
+            print("  Modal Certidao Valida detectado")
 
-            if not btn_consultar_modal:
-                # Tenta texto alternativo
-                btn_consultar_modal = page.query_selector('button:has-text("Consultar")')
+        # Clica Consultar Certidao (botao outline, nao o primary)
+        consultado = page.evaluate("""() => {
+            const btns = [...document.querySelectorAll('button')];
+            const b = btns.find(b => b.innerText.includes('Consultar Certidão')
+                                  && !b.classList.contains('primary'));
+            if (b) { b.click(); return true; }
+            const b2 = btns.find(b => b.innerText.includes('Consultar'));
+            if (b2) { b2.click(); return true; }
+            return false;
+        }""")
+        if not consultado:
+            resultado["msg"] = "Botao Consultar no modal nao encontrado"
+            return resultado
+        time.sleep(4)
 
-            if not btn_consultar_modal:
-                resultado["msg"] = "Botao Consultar nao encontrado no modal"
-                return resultado
+        if debug:
+            print(f"  Hash /consultar: {page.evaluate('() => window.location.hash')}")
 
-            btn_consultar_modal.click()
-            time.sleep(3)
+        # 5. Pagina /consultar → Consultar Certidao (primary)
+        try:
+            page.wait_for_url("**/consultar**", timeout=10000)
+        except Exception:
+            pass
+        time.sleep(1)
 
-            if debug:
-                print(f"  URL apos Consultar modal: {page.url}")
+        page.evaluate("""() => {
+            const btn = document.querySelector('button.br-button.primary')
+                     || [...document.querySelectorAll('button')].find(
+                            b => b.innerText.includes('Consultar Certidão'));
+            if (btn) btn.click();
+        }""")
+        time.sleep(8)
 
-            # ---- 5. Pagina /consultar — clica "Consultar Certidao" ----
-            page.wait_for_url("**/cnpj/consultar**", timeout=10000)
-            time.sleep(1)
+        if debug:
+            print(f"  Hash /resultado: {page.evaluate('() => window.location.hash')}")
 
-            btn_consultar_pg = page.query_selector('button:has-text("Consultar Certidão")')
-            if not btn_consultar_pg:
-                btn_consultar_pg = page.query_selector('button:has-text("Consultar")')
+        # 6. Pagina /resultado → Segunda Via
+        try:
+            page.wait_for_url("**/resultado**", timeout=12000)
+        except Exception:
+            pass
+        time.sleep(2)
 
-            if not btn_consultar_pg:
-                resultado["msg"] = "Botao Consultar na pagina /consultar nao encontrado"
-                return resultado
+        try:
+            page.wait_for_selector('button[title="Segunda via"]', timeout=10000)
+        except Exception:
+            resultado["msg"] = "Botao Segunda via nao encontrado em /resultado"
+            return resultado
 
-            btn_consultar_pg.click()
-            time.sleep(4)
+        page.evaluate("""() => {
+            const btn = document.querySelector('button[title="Segunda via"]');
+            if (btn) btn.click();
+        }""")
+        time.sleep(6)
 
-            if debug:
-                print(f"  URL apos Consultar pag: {page.url}")
-
-            # ---- 6. Pagina /resultado — clica icone 2a Via (1a linha) ----
-            page.wait_for_url("**/consultar/resultado**", timeout=10000)
-            time.sleep(1)
-
-            # O icone de download fica na ultima coluna "2a Via" da primeira linha
-            btn_2avia = (
-                page.query_selector('table tbody tr:first-child td:last-child a')
-                or page.query_selector('table tbody tr:first-child td:last-child button')
-                or page.query_selector('tbody tr:first-child .br-button')
-                or page.query_selector('tbody tr:first-child [aria-label*="Via"]')
-                or page.query_selector('tbody tr:first-child [title*="via"]')
-            )
-
-            if not btn_2avia:
-                # Fallback: procura qualquer botao/link de download na tabela
-                btn_2avia = page.query_selector('tbody tr:first-child a[download], tbody tr:first-child button[download]')
-
-            if not btn_2avia:
-                resultado["msg"] = "Icone 2a Via nao encontrado na tabela de resultados"
-                return resultado
-
-            if debug:
-                print(f"  Clicando 2a Via...")
-
-            btn_2avia.click()
-            time.sleep(5)
-
-        else:
-            # Sem modal: certidao foi emitida diretamente ou outro fluxo
-            if debug:
-                print("  Sem modal — verificando download/nova pagina direta")
-            time.sleep(5)
-
-        # ---- 7. Captura o resultado (nova pagina ou download) ----
-        alvo = None
-
-        # Verifica nova pagina
-        for np in novas_paginas:
-            try:
-                if not np.is_closed():
-                    np.wait_for_load_state("networkidle", timeout=10000)
-                    alvo = np
-                    break
-            except Exception:
-                pass
-
-        # Se download foi detectado
-        if downloads and not alvo:
-            dl = downloads[0]
-            dl.save_as(str(output_path))
+        # 7. PDF via interceptacao /seg-via/
+        if pdf_base64:
+            import base64
+            pdf_bytes = base64.b64decode(pdf_base64[0])
+            output_path.write_bytes(pdf_bytes)
             resultado["status"] = "ok"
             resultado["arquivo"] = str(output_path)
-            resultado["msg"] = "OK (download)"
+            resultado["msg"] = "OK (base64 PDF via /seg-via/)"
             return resultado
 
-        # Se nova pagina
-        if alvo:
-            if debug:
-                print(f"  Nova pagina URL: {alvo.url}")
-            try:
-                alvo.wait_for_load_state("networkidle", timeout=10000)
-            except Exception:
-                pass
-            alvo.pdf(path=str(output_path), format="A4", print_background=True)
-            try:
-                alvo.close()
-            except Exception:
-                pass
-            resultado["status"] = "ok"
-            resultado["arquivo"] = str(output_path)
-            resultado["msg"] = "OK (nova pagina)"
-            return resultado
-
-        # Verifica se a propria pagina principal exibe a certidao
-        cur_url = page.url.lower()
-        if "certidao" in cur_url and "resultado" not in cur_url:
-            if debug:
-                print(f"  Pagina principal tem certidao: {page.url}")
-            page.pdf(path=str(output_path), format="A4", print_background=True)
-            resultado["status"] = "ok"
-            resultado["arquivo"] = str(output_path)
-            resultado["msg"] = "OK (pagina principal)"
-            return resultado
-
-        resultado["msg"] = "Certidao nao capturada (sem download nem nova pagina)"
+        resultado["msg"] = "PDF nao capturado — resposta /seg-via/ nao interceptada"
 
     except Exception as e:
         resultado["msg"] = str(e)
     finally:
         try:
-            context.remove_listener("page", _on_new_page)
-        except Exception:
-            pass
-        try:
-            page.remove_listener("download", _on_download)
+            page.remove_listener("response", _on_response)
         except Exception:
             pass
 
@@ -387,3 +330,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
