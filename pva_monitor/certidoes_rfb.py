@@ -246,9 +246,9 @@ def main():
 
     try:
         import undetected_chromedriver as uc
-    except ImportError:
-        print("undetected_chromedriver nao instalado.")
-        print("Instale com:  pip install undetected-chromedriver")
+    except ImportError as _uc_err:
+        print(f"ERRO import undetected_chromedriver: {_uc_err}")
+        print("Instale com:  python -m pip install undetected-chromedriver")
         sys.exit(1)
 
     from selenium.webdriver.common.by import By
