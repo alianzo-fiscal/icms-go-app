@@ -178,17 +178,17 @@ def calcular_div3(intra: pd.DataFrame) -> pd.DataFrame:
     """DIV-3: Base reduzida com CST 00 intraestadual (ATENÇÃO)"""
     cand = intra[
         (intra['SITTRIBUT'] == '00') &
-        (intra['VLITEM'] > 0) &
+        (intra['VLCONTABIL'] > 0) &
         (intra['VLBASEICMS'] > 0)
     ].copy()
     if cand.empty:
         return cand
-    cand['_ratio'] = cand['VLBASEICMS'] / cand['VLITEM']
+    cand['_ratio'] = cand['VLBASEICMS'] / cand['VLCONTABIL']
     d3 = cand[cand['_ratio'] < 0.95].copy()
     if d3.empty:
         return d3
     d3['reducao_pct'] = ((1 - d3['_ratio']) * 100).round(2)
-    d3['ICMS Correto (R$)'] = (d3['VLITEM'] * d3['PERCICMS'] / 100).round(2)
+    d3['ICMS Correto (R$)'] = (d3['VLCONTABIL'] * d3['PERCICMS'] / 100).round(2)
     d3['Dif. ICMS (R$)'] = (d3['VLICMS'] - d3['ICMS Correto (R$)']).round(2)
     d3['Crítica'] = d3['reducao_pct'].apply(
         lambda r: f'Base reduzida ~{r:.1f}% com CST 00 — SPED exige CST 20 para base reduzida por convênio'
@@ -199,13 +199,13 @@ def calcular_div3(intra: pd.DataFrame) -> pd.DataFrame:
 
 def calcular_div4(intra: pd.DataFrame) -> pd.DataFrame:
     """DIV-4: CST 20 — verificar percentual de redução (ATENÇÃO)"""
-    d4 = intra[(intra['SITTRIBUT'] == '20') & (intra['VLITEM'] > 0)].copy()
+    d4 = intra[(intra['SITTRIBUT'] == '20') & (intra['VLCONTABIL'] > 0)].copy()
     if d4.empty:
         d4['ICMS Correto (R$)'] = pd.Series(dtype=float)
         d4['Dif. ICMS (R$)'] = pd.Series(dtype=float)
         d4['Crítica'] = pd.Series(dtype=str)
         return d4
-    d4['_ratio'] = (d4['VLBASEICMS'] / d4['VLITEM'].replace(0, 1)).round(4)
+    d4['_ratio'] = (d4['VLBASEICMS'] / d4['VLCONTABIL'].replace(0, 1)).round(4)
     d4['reducao_pct'] = ((1 - d4['_ratio']) * 100).round(2)
     d4['ICMS Correto (R$)'] = 0.0
     d4['Dif. ICMS (R$)'] = 0.0
@@ -323,7 +323,7 @@ def gerar_excel(df: pd.DataFrame, divs: dict, grp: pd.DataFrame, periodo: str, c
     resumo_rows = []
     for nome_aba, dados, desc, crit in divs_info:
         n = len(dados) if dados is not None and not dados.empty else 0
-        vl = round(dados['VLITEM'].sum(), 2) if dados is not None and not dados.empty and 'VLITEM' in dados.columns else 0
+        vl = round(dados['VLCONTABIL'].sum(), 2) if dados is not None and not dados.empty and 'VLCONTABIL' in dados.columns else 0
         dif = round(dados['Dif. ICMS (R$)'].sum(), 2) if dados is not None and not dados.empty and 'Dif. ICMS (R$)' in dados.columns else 0
         resumo_rows.append({
             'DIV': nome_aba.replace('DIV', 'DIV-'),
@@ -464,7 +464,7 @@ def gerar_word(df: pd.DataFrame, divs_dict: dict, periodo: str, caminho_word: Pa
     aliq_ef = (df['VLICMS'].sum() / df['VLBASEICMS'].sum() * 100) if df['VLBASEICMS'].sum() > 0 else 0
     dados_vg = [
         ('Total de Registros', f"{len(df):,}"),
-        ('Valor Total Saídas (R$)', f"{df['VLITEM'].sum():,.2f}"),
+        ('Valor Total Saídas (R$)', f"{df['VLCONTABIL'].sum():,.2f}"),
         ('Base ICMS Total (R$)', f"{df['VLBASEICMS'].sum():,.2f}"),
         ('ICMS Total (R$)', f"{df['VLICMS'].sum():,.2f}"),
         ('Intraestadual (registros)', f"{len(intra):,}"),
@@ -564,14 +564,14 @@ def gerar_word(df: pd.DataFrame, divs_dict: dict, periodo: str, caminho_word: Pa
 
         if dados is not None and not dados.empty:
             top_n = min(5, len(dados))
-            if 'VLITEM' in dados.columns:
-                top = dados.nlargest(top_n, 'VLITEM')
+            if 'VLCONTABIL' in dados.columns:
+                top = dados.nlargest(top_n, 'VLCONTABIL')
             else:
                 top = dados.head(top_n)
             doc.add_paragraph('Principais casos:')
             for _, row in top.iterrows():
                 nf = row.get('NUMNOTA', '—')
-                vl = row.get('VLITEM', 0)
+                vl = float(row.get('VLCONTABIL', row.get('VLITEM', 0)))
                 desc = str(row.get('DESCRICAO', ''))[:50]
                 doc.add_paragraph(f"• NF {nf} — R$ {vl:,.2f} — {desc}", style='List Bullet')
 
