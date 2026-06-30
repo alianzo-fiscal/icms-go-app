@@ -53,7 +53,21 @@ def carregar_dados(caminhos: list) -> pd.DataFrame:
                     print(f"  Aviso: não foi possível ler {p.name} como CSV.")
                     continue
             elif ext in ('.xls', '.xlsx'):
-                d = pd.read_excel(p, dtype=str)
+                d = None
+                engines = (['openpyxl'] if ext == '.xlsx' else []) + \
+                          (['xlrd']    if ext == '.xls'  else []) + \
+                          ['openpyxl', 'xlrd']
+                last_err = None
+                for eng in dict.fromkeys(engines):
+                    try:
+                        d = pd.read_excel(p, dtype=str, engine=eng)
+                        break
+                    except Exception as ex:
+                        last_err = ex
+                        continue
+                if d is None:
+                    print(f"  Aviso: {p.name}: {last_err}")
+                    continue
             else:
                 print(f"  Aviso: extensão não suportada em {p.name}, ignorando.")
                 continue
