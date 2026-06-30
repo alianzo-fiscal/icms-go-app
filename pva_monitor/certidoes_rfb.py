@@ -1,38 +1,27 @@
 # coding: utf-8
 """
-certidoes_rfb.py — Emissao CND Federal (Receita Federal) via Playwright.
+certidoes_rfb.py — Emissao CND Federal (Receita Federal) via undetected_chromedriver.
 
-IMPORTANTE: A Receita Federal so emite certidao para o CNPJ da MATRIZ.
-Todos os CNPJs filiais de uma mesma empresa compartilham UMA certidao.
-
-Novo portal (jul/2025): https://servicos.receitafederal.gov.br/servico/certidoes/
-
-Fluxo:
-  1. Navega para #/home/cnpj
-  2. Preenche CNPJ da matriz e clica "Emitir Certidao"
-  3a. Modal "Certidao Valida Encontrada" -> clica "Consultar Certidao"
-       -> pagina /consultar -> clica "Consultar Certidao"
-       -> pagina /consultar/resultado -> clica icone 2a Via
-  3b. Sem modal -> certidao emitida diretamente (PDF abre/baixa)
-  4. Captura PDF via nova pagina ou download
+Usa undetected_chromedriver para bypassar reCAPTCHA v3 do portal RFB.
+Perfil real do Chrome do usuario e carregado automaticamente.
 
 Uso:
   python certidoes_rfb.py --empresa EDN
-  python certidoes_rfb.py --empresa EDN --headless
+  python certidoes_rfb.py --empresa GRUPO
   python certidoes_rfb.py --empresa EDN --debug
 """
 import sys
 import time
 import argparse
 import json
+import os
+import subprocess
 from pathlib import Path
 from datetime import date
 
 URL_RFB = "https://servicos.receitafederal.gov.br/servico/certidoes/#/home/cnpj"
-DELAY_ENTRE = 5
+DELAY_ENTRE = 8
 
-# Apenas CNPJ MATRIZES (branch 0001)
-# Extraido de Inscricoes 1.xlsx / INSCRICAO MUNICIPAL
 EMPRESAS = {
     "EDN": {
         "nome": "EDN Utilidades Domesticas",
@@ -58,121 +47,107 @@ def _so_numeros(s):
 
 
 def _formata_cnpj(cnpj_num):
-    """28221185000183 -> 28.221.185/0001-83"""
     d = cnpj_num.zfill(14)
     return f"{d[0:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:14]}"
 
 
-def _pagina_em(pg, *partes):
-    try:
-        url = (pg.url or "").lower()
-        return not pg.is_closed() and any(p in url for p in partes)
-    except Exception:
-        return False
+# Interceptor JS: captura resposta /seg-via/ (base64 PDF) via fetch override
+FETCH_INTERCEPTOR = """
+window.__rfb_pdf_b64 = null;
+const __orig_fetch = window.fetch;
+window.fetch = async function(...args) {
+    const resp = await __orig_fetch(...args);
+    try {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0].url || '');
+        if (url.includes('seg-via')) {
+            resp.clone().json().then(function(data) {
+                if (data && data.pdf) { window.__rfb_pdf_b64 = data.pdf; }
+            }).catch(function(){});
+        }
+    } catch(e) {}
+    return resp;
+};
+"""
 
 
-def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
-    """
-    Fluxo RFB (requer Google Chrome via channel='chrome' para passar reCAPTCHA v3):
-      1. Navega #/home/cnpj → preenche CNPJ via teclado → Emitir via JS
-      2. Modal "Certidao Valida" → Consultar Certidao → /consultar
-      3. /consultar → Consultar Certidao → /consultar/resultado
-      4. /resultado → button[title='Segunda via'] → intercepta /seg-via/ → base64 PDF
-    """
+def emitir_cnpj(driver, cnpj_num, output_path, debug=False):
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.keys import Keys
+
     resultado = {"cnpj": cnpj_num, "status": "erro", "arquivo": "", "msg": ""}
-    pdf_base64 = []
-
-    def _on_response(resp):
-        if "seg-via" in resp.url and resp.status == 200:
-            try:
-                import base64 as _b64, json as _json
-                body = resp.body()
-                data = _json.loads(body)
-                b64 = data.get("pdf", "")
-                if b64:
-                    pdf_base64.append(b64)
-            except Exception:
-                pass
-
-    page.on("response", _on_response)
-
-    # Aplica stealth para mascarar sinais de automacao (reCAPTCHA v3)
-    try:
-        from playwright_stealth import stealth_sync
-        stealth_sync(page)
-    except ImportError:
-        pass  # fallback: continua sem stealth
 
     try:
+        # Limpa PDF capturado anterior
+        driver.execute_script("window.__rfb_pdf_b64 = null;")
+
         # 1. Navega
-        page.goto(URL_RFB, timeout=60000, wait_until="load")
-        time.sleep(3)
-        if debug:
-            print(f"  URL: {page.url}")
+        driver.get(URL_RFB)
+        time.sleep(4)
 
-        # 2. Preenche CNPJ via teclado (Angular 2+ precisa de eventos reais)
+        if debug:
+            print(f"  URL: {driver.current_url}")
+
+        # 2. Aguarda campo CNPJ
+        wait = WebDriverWait(driver, 20)
         try:
-            page.wait_for_selector('input[placeholder="Informe o CNPJ"]', timeout=15000)
+            campo = wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, 'input[placeholder="Informe o CNPJ"]')
+            ))
         except Exception:
-            resultado["msg"] = "Campo CNPJ nao apareceu apos 15s"
+            resultado["msg"] = "Campo CNPJ nao apareceu em 20s"
             return resultado
+
+        time.sleep(1)
+        campo.click()
+        time.sleep(0.3)
+        ActionChains(driver).key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
+        time.sleep(0.2)
+
+        # Digita CNPJ caractere a caractere (Angular 2+)
+        for char in cnpj_num:
+            campo.send_keys(char)
+            time.sleep(0.07)
         time.sleep(1)
 
-        campo_loc = page.locator('input[placeholder="Informe o CNPJ"]')
-        campo_loc.click()
-        page.keyboard.press("Control+a")
-        page.keyboard.press("Delete")
-        time.sleep(0.3)
-        page.keyboard.type(cnpj_num, delay=60)
-        time.sleep(0.8)
+        if debug:
+            print(f"  Valor preenchido: {campo.get_attribute('value')}")
+
+        # 3. Clique real no botao Emitir
+        try:
+            btn = driver.find_element(
+                By.CSS_SELECTOR,
+                "button.br-button.primary.btn-acao, button.br-button.primary"
+            )
+            ActionChains(driver).move_to_element(btn).pause(0.5).click().perform()
+        except Exception:
+            driver.execute_script("""
+                const b = document.querySelector('button.br-button.primary.btn-acao')
+                       || document.querySelector('button[type="submit"]');
+                if (b) b.click();
+            """)
+        time.sleep(7)
 
         if debug:
-            print(f"  Valor preenchido: {campo_loc.input_value()}")
-
-        # 3. Emitir — clique real (gera eventos de mouse para reCAPTCHA v3)
-        # Move o mouse pelo campo primeiro para simular comportamento humano
-        try:
-            campo_box = campo_loc.bounding_box()
-            if campo_box:
-                page.mouse.move(campo_box["x"] + 50, campo_box["y"] + 5)
-        except Exception:
-            pass
-        time.sleep(0.5)
-
-        btn_emitir = page.locator(
-            'button.br-button.primary.btn-acao, button[type="submit"]'
-        ).first
-        try:
-            btn_emitir.scroll_into_view_if_needed(timeout=5000)
-            time.sleep(0.4)
-            btn_emitir.click(timeout=8000)
-        except Exception:
-            # Fallback JS se locator falhar
-            page.evaluate("""() => {
-                const btn = document.querySelector('button.br-button.primary.btn-acao')
-                         || document.querySelector('button[type="submit"]');
-                if (btn) btn.click();
-            }""")
-        time.sleep(6)
-
-        if debug:
-            print(f"  Hash apos Emitir: {page.evaluate('() => window.location.hash')}")
+            print(f"  Hash apos Emitir: {driver.execute_script('return window.location.hash')}")
 
         # Detecta erro 023
-        erro_msg = page.evaluate("""() => {
-            const el = document.querySelector('[class*="br-message"], [role="alert"]');
-            return el ? el.innerText.trim() : null;
-        }""")
-        if erro_msg and any(x in erro_msg for x in ["Não foi possível", "tente novamente", "023"]):
-            resultado["msg"] = f"Erro RFB 023 (reCAPTCHA) — use channel=chrome: {erro_msg[:80]}"
-            return resultado
+        try:
+            msg_el = driver.find_element(By.CSS_SELECTOR, '[class*="br-message"], [role="alert"]')
+            msg_txt = msg_el.text.strip()
+            if any(x in msg_txt for x in ["Não foi possível", "tente novamente", "023"]):
+                resultado["msg"] = f"Erro RFB 023 (reCAPTCHA): {msg_txt[:120]}"
+                return resultado
+        except Exception:
+            pass
 
         # 4. Modal "Certidao Valida" → Consultar
-        modal_ok = page.evaluate("""() => {
+        modal_ok = driver.execute_script("""
             return !![...document.querySelectorAll('*')].find(
                 el => el.innerText && el.innerText.includes('Certidão Válida'));
-        }""")
-
+        """)
         if not modal_ok:
             resultado["msg"] = "Modal Certidao Valida nao apareceu"
             return resultado
@@ -180,8 +155,7 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
         if debug:
             print("  Modal Certidao Valida detectado")
 
-        # Clica Consultar Certidao (botao outline, nao o primary)
-        consultado = page.evaluate("""() => {
+        consultado = driver.execute_script("""
             const btns = [...document.querySelectorAll('button')];
             const b = btns.find(b => b.innerText.includes('Consultar Certidão')
                                   && !b.classList.contains('primary'));
@@ -189,71 +163,52 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
             const b2 = btns.find(b => b.innerText.includes('Consultar'));
             if (b2) { b2.click(); return true; }
             return false;
-        }""")
+        """)
         if not consultado:
             resultado["msg"] = "Botao Consultar no modal nao encontrado"
             return resultado
-        time.sleep(4)
+        time.sleep(5)
 
-        if debug:
-            print(f"  Hash /consultar: {page.evaluate('() => window.location.hash')}")
-
-        # 5. Pagina /consultar → Consultar Certidao (primary)
-        try:
-            page.wait_for_url("**/consultar**", timeout=10000)
-        except Exception:
-            pass
-        time.sleep(1)
-
-        page.evaluate("""() => {
+        # 5. Pagina /consultar → Consultar Certidao
+        driver.execute_script("""
             const btn = document.querySelector('button.br-button.primary')
                      || [...document.querySelectorAll('button')].find(
                             b => b.innerText.includes('Consultar Certidão'));
             if (btn) btn.click();
-        }""")
-        time.sleep(8)
+        """)
+        time.sleep(9)
 
         if debug:
-            print(f"  Hash /resultado: {page.evaluate('() => window.location.hash')}")
+            print(f"  Hash /resultado: {driver.execute_script('return window.location.hash')}")
 
         # 6. Pagina /resultado → Segunda Via
         try:
-            page.wait_for_url("**/resultado**", timeout=12000)
-        except Exception:
-            pass
-        time.sleep(2)
-
-        try:
-            page.wait_for_selector('button[title="Segunda via"]', timeout=10000)
+            wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, 'button[title="Segunda via"]')
+            ))
         except Exception:
             resultado["msg"] = "Botao Segunda via nao encontrado em /resultado"
             return resultado
 
-        page.evaluate("""() => {
+        driver.execute_script("""
             const btn = document.querySelector('button[title="Segunda via"]');
             if (btn) btn.click();
-        }""")
-        time.sleep(6)
+        """)
+        time.sleep(7)
 
-        # 7. PDF via interceptacao /seg-via/
-        if pdf_base64:
+        # 7. PDF via window.__rfb_pdf_b64
+        b64 = driver.execute_script("return window.__rfb_pdf_b64;")
+        if b64:
             import base64
-            pdf_bytes = base64.b64decode(pdf_base64[0])
-            output_path.write_bytes(pdf_bytes)
+            output_path.write_bytes(base64.b64decode(b64))
             resultado["status"] = "ok"
             resultado["arquivo"] = str(output_path)
             resultado["msg"] = "OK (base64 PDF via /seg-via/)"
-            return resultado
-
-        resultado["msg"] = "PDF nao capturado — resposta /seg-via/ nao interceptada"
+        else:
+            resultado["msg"] = "PDF nao capturado — resposta /seg-via/ nao interceptada"
 
     except Exception as e:
         resultado["msg"] = str(e)
-    finally:
-        try:
-            page.remove_listener("response", _on_response)
-        except Exception:
-            pass
 
     return resultado
 
@@ -290,88 +245,47 @@ def main():
     print(f"{'='*60}\n")
 
     try:
-        from playwright.sync_api import sync_playwright
+        import undetected_chromedriver as uc
     except ImportError:
-        print("Playwright nao instalado.")
+        print("undetected_chromedriver nao instalado.")
+        print("Instale com:  pip install undetected-chromedriver")
         sys.exit(1)
 
+    from selenium.webdriver.common.by import By
+
+    chrome_profile = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
+
+    # Fecha Chrome existente para liberar perfil
+    subprocess.run(["taskkill", "/F", "/T", "/IM", "chrome.exe"], capture_output=True)
+    time.sleep(3)
+
+    options = uc.ChromeOptions()
+    options.add_argument(f"--user-data-dir={chrome_profile}")
+    options.add_argument("--profile-directory=Default")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--no-restore-last-session")
+    options.add_argument("--disable-session-crashed-bubble")
+    options.add_argument("--hide-crash-restore-bubble")
+    if args.headless:
+        options.add_argument("--headless=new")
+
+    print("  [Chrome] Iniciando com undetected_chromedriver + perfil real...")
+    driver = uc.Chrome(options=options, use_subprocess=True)
+    driver.implicitly_wait(5)
+
+    # Injeta interceptor de fetch em todas as paginas (persiste via CDP)
+    try:
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": FETCH_INTERCEPTOR
+        })
+    except Exception as e:
+        print(f"  [Aviso] Nao foi possivel instalar interceptor CDP: {e}")
+
+    print("  [Chrome] Pronto\n")
+
     resultados = []
-
-    with sync_playwright() as p:
-        # Lanca Chrome nativo via subprocess com perfil real + porta de debug.
-        # Isso evita os flags de automacao que o Playwright adiciona ao lancar ele mesmo,
-        # e garante que o Chrome use o perfil completo do usuario (cookies, sessao Google,
-        # historico de navegacao) — essencial para passar o reCAPTCHA v3 do portal RFB.
-        import os, subprocess as _sp, socket as _sock
-
-        chrome_paths = [
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-        ]
-        chrome_exe = next((c for c in chrome_paths if os.path.exists(c)), None)
-        chrome_profile = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
-
-        # Encerra Chrome em execucao (com /T mata a arvore de processos completa)
-        _sp.run(["taskkill", "/F", "/T", "/IM", "chrome.exe"], capture_output=True)
-        _sp.run(["taskkill", "/F", "/T", "/IM", "GoogleCrashHandler.exe"], capture_output=True)
-        time.sleep(3)  # aguarda liberacao completa de portas/perfil
-
-        if chrome_exe:
-            _sp.Popen([
-                chrome_exe,
-                "--remote-debugging-port=9222",
-                f"--user-data-dir={chrome_profile}",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--no-restore-last-session",
-                "--disable-session-crashed-bubble",
-                "--hide-crash-restore-bubble",
-                "--suppress-message-center-popups",
-                "--disable-extensions-except=",
-                "about:blank",
-            ])
-            print("  [Chrome] Aguardando Chrome nativo na porta 9222...")
-            # Aguarda Chrome subir (ate 20s) — usa 127.0.0.1 (IPv4, nao ::1)
-            for _ in range(40):
-                try:
-                    s = _sock.create_connection(("127.0.0.1", 9222), timeout=0.5)
-                    s.close()
-                    break
-                except Exception:
-                    time.sleep(0.5)
-            else:
-                print("  [Chrome] Timeout aguardando porta 9222")
-            time.sleep(2)  # estabilizacao adicional
-            try:
-                browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
-                # Usa contexto existente (perfil do usuario ja carregado)
-                ctx_list = browser.contexts
-                context = ctx_list[0] if ctx_list else browser.new_context(accept_downloads=True)
-                print("  [Chrome] Conectado via CDP ao Chrome nativo com perfil real")
-                cdp_ok = True
-            except Exception as e:
-                print(f"  [Chrome] Falha CDP: {e}")
-                cdp_ok = False
-        else:
-            cdp_ok = False
-
-        if not cdp_ok:
-            # Fallback: Chrome via Playwright (sem perfil real)
-            print("  [Chrome] Fallback: Playwright channel=chrome (sem perfil real)")
-            browser2 = p.chromium.launch(
-                channel="chrome",
-                headless=args.headless,
-                slow_mo=80,
-                args=["--disable-blink-features=AutomationControlled"],
-            )
-            context = browser2.new_context(accept_downloads=True)
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-
-        pg = context.new_page()
-
+    try:
         for i, item in enumerate(lista, 1):
             cnpj_num = _so_numeros(item["cnpj"])
             tag      = item["tag"]
@@ -386,15 +300,16 @@ def main():
             if args.debug:
                 print()
 
-            res = emitir_cnpj(pg, context, cnpj_num, pdf_path, debug=args.debug)
+            res = emitir_cnpj(driver, cnpj_num, pdf_path, debug=args.debug)
             resultados.append(res)
             print("OK" if res["status"] == "ok" else f"ERRO: {res['msg']}")
 
             if i < len(lista):
                 time.sleep(DELAY_ENTRE)
 
+    finally:
         try:
-            context.close()
+            driver.quit()
         except Exception:
             pass
 
