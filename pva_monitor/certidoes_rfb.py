@@ -255,22 +255,13 @@ def main():
 
     chrome_profile = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
 
-    # Fecha Chrome existente para liberar perfil
-    subprocess.run(["taskkill", "/F", "/T", "/IM", "chrome.exe"], capture_output=True)
-    time.sleep(3)
-
     options = uc.ChromeOptions()
-    options.add_argument(f"--user-data-dir={chrome_profile}")
-    options.add_argument("--profile-directory=Default")
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
-    options.add_argument("--no-restore-last-session")
-    options.add_argument("--disable-session-crashed-bubble")
-    options.add_argument("--hide-crash-restore-bubble")
     if args.headless:
         options.add_argument("--headless=new")
 
-    print("  [Chrome] Iniciando com undetected_chromedriver + perfil real...")
+    print("  [Chrome] Iniciando com undetected_chromedriver...")
     driver = uc.Chrome(options=options, use_subprocess=True)
     driver.implicitly_wait(5)
 
