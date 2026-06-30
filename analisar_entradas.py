@@ -702,8 +702,11 @@ def main():
     gerar_word(df, divs, periodo, caminho_word)
 
     print('Concluído!')
-    print(f'  Excel: {caminho_excel}')
-    print(f'  Word:  {caminho_word}')
+
+
+if __name__ == '__main__':
+    main()
+   print(f'  Word:  {caminho_word}')
 
 
 if __name__ == '__main__':
