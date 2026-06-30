@@ -296,6 +296,13 @@ def main():
                 ],
                 accept_downloads=True,
             )
+            # Mascara navigator.webdriver mesmo com perfil real
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR','pt','en-US','en']});
+            """)
             print("  [Chrome] Usando perfil real do Chrome (com cookies/sessao)")
         except Exception as e:
             print(f"  [Chrome] Perfil ocupado ou erro ({e}) — usando contexto limpo")
