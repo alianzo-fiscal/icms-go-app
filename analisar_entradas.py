@@ -184,12 +184,12 @@ def calcular_div4(inter):
     """DIV-4: Base reduzida com CST 00 interestadual  (ATENCAO)"""
     cand = inter[
         (inter['CST'] == '00') &
-        (inter['VLITEM'] > 0) &
+        (inter['VLCONTABIL'] > 0) &
         (inter['VLBASEICMS'] > 0)
     ].copy()
     if cand.empty:
         return pd.DataFrame(columns=COLS_DIV)
-    cand['_ratio'] = cand['VLBASEICMS'] / cand['VLITEM']
+    cand['_ratio'] = cand['VLBASEICMS'] / cand['VLCONTABIL']
     d4 = cand[cand['_ratio'] < 0.95].copy()
     if d4.empty:
         return pd.DataFrame(columns=COLS_DIV)
@@ -341,7 +341,7 @@ def _aba_resumo(wb, df, divs, periodo):
     dados = [
         ('Total de Registros', f"{len(df):,}", '', ''),
         ('Intraestadual (registros)', f"{len(intra):,}", 'Interestadual (registros)', f"{len(inter):,}"),
-        ('Valor Total Entradas (R$)', f"{df['VLITEM'].sum():,.2f}",
+        ('Valor Total Entradas (R$)', f"{df['VLCONTABIL'].sum():,.2f}",
          'Base ICMS Total (R$)', f"{df['VLBASEICMS'].sum():,.2f}"),
         ('ICMS Total (R$)', f"{df['VLICMS'].sum():,.2f}", 'Período', periodo),
         ('', '', '', ''),
@@ -458,8 +458,8 @@ def _aba_sintese(wb, divs, periodo):
         dados_div = divs.get(div_id)
         n = len(dados_div) if dados_div is not None and not dados_div.empty else 0
         vl = (
-            round(dados_div['VLITEM'].sum(), 2)
-            if dados_div is not None and not dados_div.empty and 'VLITEM' in dados_div.columns
+            round(dados_div['VLCONTABIL'].sum(), 2)
+            if dados_div is not None and not dados_div.empty and 'VLCONTABIL' in dados_div.columns
             else 0.0
         )
         dif = (
@@ -533,7 +533,7 @@ def gerar_word(df, divs_dict, periodo, caminho_word):
     tbl.style = 'Table Grid'
     dados_vg = [
         ('Total de Registros', f"{len(df):,}"),
-        ('Valor Total Entradas (R$)', f"{df['VLITEM'].sum():,.2f}"),
+        ('Valor Total Entradas (R$)', f"{df['VLCONTABIL'].sum():,.2f}"),
         ('Base ICMS Total (R$)', f"{df['VLBASEICMS'].sum():,.2f}"),
         ('ICMS Total (R$)', f"{df['VLICMS'].sum():,.2f}"),
         ('Intraestadual (registros)', f"{len(intra):,}"),
@@ -610,12 +610,12 @@ def gerar_word(df, divs_dict, periodo, caminho_word):
 
         doc.add_paragraph(narrativa)
 
-        if dados is not None and not dados.empty and 'VLITEM' in dados.columns:
-            top5 = dados.nlargest(min(5, len(dados)), 'VLITEM')
+        if dados is not None and not dados.empty and 'VLCONTABIL' in dados.columns:
+            top5 = dados.nlargest(min(5, len(dados)), 'VLCONTABIL')
             doc.add_paragraph('Principais casos:')
             for _, row in top5.iterrows():
                 nf = row.get('NUMNOTA', '—')
-                vl = float(row.get('VLITEM', 0))
+                vl = float(row.get('VLCONTABIL', row.get('VLITEM', 0)))
                 desc = str(row.get('DESCRICAO', ''))[:50]
                 doc.add_paragraph(f'NF {nf} — R$ {vl:,.2f} — {desc}', style='List Bullet')
 
