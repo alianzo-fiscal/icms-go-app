@@ -588,42 +588,51 @@ Analisa as notas fiscais de **entrada** e identifica divergências de ICMS:
             st.info(f"📎 {len(uploaded_ent)} arquivo(s): " + ", ".join(f.name for f in uploaded_ent))
 
         if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
+            st.session_state.pop("res_ent", None)
+            st.session_state.pop("err_ent", None)
             try:
                 with st.spinner("Processando arquivos de entradas..."):
-                    (excel_bytes, word_bytes, periodo, contagens,
-                     total_registros, total_inter, nome_base) = _processar_entradas(uploaded_ent)
-                st.success(f"✅ Análise concluída — Período: **{periodo}**")
-                total_divs = sum(contagens.values())
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Total de Registros", f"{total_registros:,}")
-                col2.metric("Interestaduais", f"{total_inter:,}")
-                col3.metric("Divergências", f"{total_divs:,}")
-                col4.metric("Período", periodo)
-                if total_divs > 0:
-                    st.markdown("#### Divergências encontradas")
-                    desc = {"DIV1":"Importada — alíq ≠ 4%","DIV2":"CST 41 interestadual",
-                            "DIV3":"CST 90 interestadual","DIV4":"Base reduzida s/ CST 20",
-                            "DIV5":"Alíq 4% + origem nacional"}
-                    cols = st.columns(len(contagens))
-                    for i, (k, v) in enumerate(contagens.items()):
-                        cols[i].metric(f"{k} — {desc.get(k, k)}", v, "registros", delta_color="off")
-                else:
-                    st.info("Nenhuma divergência encontrada.")
-                st.divider()
-                _section("📥 Baixar Relatórios")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.download_button("⬇️ Baixar Excel (.xlsx)", excel_bytes,
-                                       f"{nome_base}.xlsx",
-                                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                       use_container_width=True)
-                with c2:
-                    st.download_button("⬇️ Baixar Word (.docx)", word_bytes,
-                                       f"{nome_base}.docx",
-                                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                       use_container_width=True)
+                    resultado = _processar_entradas(uploaded_ent)
+                st.session_state["res_ent"] = resultado
             except Exception:
-                st.error(f"❌ Erro durante o processamento:\n\n```\n{traceback.format_exc()}\n```")
+                st.session_state["err_ent"] = traceback.format_exc()
+
+        if "err_ent" in st.session_state:
+            st.error(f"❌ Erro durante o processamento:\n\n```\n{st.session_state['err_ent']}\n```")
+
+        if "res_ent" in st.session_state:
+            (excel_bytes, word_bytes, periodo, contagens,
+             total_registros, total_inter, nome_base) = st.session_state["res_ent"]
+            st.success(f"✅ Análise concluída — Período: **{periodo}**")
+            total_divs = sum(contagens.values())
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total de Registros", f"{total_registros:,}")
+            col2.metric("Interestaduais", f"{total_inter:,}")
+            col3.metric("Divergências", f"{total_divs:,}")
+            col4.metric("Período", periodo)
+            if total_divs > 0:
+                st.markdown("#### Divergências encontradas")
+                desc = {"DIV1":"Importada — alíq ≠ 4%","DIV2":"CST 41 interestadual",
+                        "DIV3":"CST 90 interestadual","DIV4":"Base reduzida s/ CST 20",
+                        "DIV5":"Alíq 4% + origem nacional"}
+                cols = st.columns(len(contagens))
+                for i, (k, v) in enumerate(contagens.items()):
+                    cols[i].metric(f"{k} — {desc.get(k, k)}", v, "registros", delta_color="off")
+            else:
+                st.info("Nenhuma divergência encontrada.")
+            st.divider()
+            _section("📥 Baixar Relatórios")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.download_button("⬇️ Baixar Excel (.xlsx)", excel_bytes,
+                                   f"{nome_base}.xlsx",
+                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   use_container_width=True)
+            with c2:
+                st.download_button("⬇️ Baixar Word (.docx)", word_bytes,
+                                   f"{nome_base}.docx",
+                                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                   use_container_width=True)
 
     # ── Saídas ────────────────────────────────────────────────────────────────
     with tab_sai:
@@ -650,42 +659,51 @@ Analisa as notas fiscais de **saída** e identifica divergências:
             st.info(f"📎 {len(uploaded_sai)} arquivo(s): " + ", ".join(f.name for f in uploaded_sai))
 
         if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
+            st.session_state.pop("res_sai", None)
+            st.session_state.pop("err_sai", None)
             try:
                 with st.spinner("Processando arquivos de saídas..."):
-                    (excel_bytes, word_bytes, periodo, contagens,
-                     total_registros, nome_base) = _processar_saidas(uploaded_sai)
-                st.success(f"✅ Análise concluída — Período: **{periodo}**")
-                total_divs = sum(contagens.values())
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total de Registros", f"{total_registros:,}")
-                col2.metric("Divergências", f"{total_divs:,}")
-                col3.metric("Período", periodo)
-                if total_divs > 0:
-                    st.markdown("#### Divergências encontradas")
-                    desc = {"DIV1":"Alíq 21% — atípica","DIV2":"Alíq 12% intra + CST 00",
-                            "DIV3":"Base reduzida s/ CST 20","DIV4":"CST 20 — verificar redução",
-                            "DIV5":"CST 90 — tributação pendente","DIV6":"CFOP 6xxx + 4% + nacional",
-                            "DIV7":"CST 40/41 — verificar convênio"}
-                    cols = st.columns(min(len(contagens), 4))
-                    for i, (k, v) in enumerate(contagens.items()):
-                        cols[i % 4].metric(f"{k} — {desc.get(k, k)}", v, "registros", delta_color="off")
-                else:
-                    st.info("Nenhuma divergência encontrada.")
-                st.divider()
-                _section("📥 Baixar Relatórios")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.download_button("⬇️ Baixar Excel (.xlsx)", excel_bytes,
-                                       f"{nome_base}.xlsx",
-                                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                       use_container_width=True)
-                with c2:
-                    st.download_button("⬇️ Baixar Word (.docx)", word_bytes,
-                                       f"{nome_base}.docx",
-                                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                       use_container_width=True)
+                    resultado = _processar_saidas(uploaded_sai)
+                st.session_state["res_sai"] = resultado
             except Exception:
-                st.error(f"❌ Erro:\n\n```\n{traceback.format_exc()}\n```")
+                st.session_state["err_sai"] = traceback.format_exc()
+
+        if "err_sai" in st.session_state:
+            st.error(f"❌ Erro:\n\n```\n{st.session_state['err_sai']}\n```")
+
+        if "res_sai" in st.session_state:
+            (excel_bytes, word_bytes, periodo, contagens,
+             total_registros, nome_base) = st.session_state["res_sai"]
+            st.success(f"✅ Análise concluída — Período: **{periodo}**")
+            total_divs = sum(contagens.values())
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total de Registros", f"{total_registros:,}")
+            col2.metric("Divergências", f"{total_divs:,}")
+            col3.metric("Período", periodo)
+            if total_divs > 0:
+                st.markdown("#### Divergências encontradas")
+                desc = {"DIV1":"Alíq 21% — atípica","DIV2":"Alíq 12% intra + CST 00",
+                        "DIV3":"Base reduzida s/ CST 20","DIV4":"CST 20 — verificar redução",
+                        "DIV5":"CST 90 — tributação pendente","DIV6":"CFOP 6xxx + 4% + nacional",
+                        "DIV7":"CST 40/41 — verificar convênio"}
+                cols = st.columns(min(len(contagens), 4))
+                for i, (k, v) in enumerate(contagens.items()):
+                    cols[i % 4].metric(f"{k} — {desc.get(k, k)}", v, "registros", delta_color="off")
+            else:
+                st.info("Nenhuma divergência encontrada.")
+            st.divider()
+            _section("📥 Baixar Relatórios")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.download_button("⬇️ Baixar Excel (.xlsx)", excel_bytes,
+                                   f"{nome_base}.xlsx",
+                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                   use_container_width=True)
+            with c2:
+                st.download_button("⬇️ Baixar Word (.docx)", word_bytes,
+                                   f"{nome_base}.docx",
+                                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                   use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
