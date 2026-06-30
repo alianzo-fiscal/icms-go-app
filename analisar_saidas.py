@@ -7,6 +7,7 @@ Uso:
     python analisar_saidas.py <arquivo1.xls> [arquivo2.csv] ...
 """
 
+from __future__ import annotations
 import sys
 import datetime
 from pathlib import Path
