@@ -273,29 +273,75 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        # Usa Google Chrome instalado (channel="chrome") para passar reCAPTCHA v3.
-        # O Chromium embutido do Playwright e detectado como bot e retorna erro 023.
-        # Fallback para chromium se Chrome nao estiver instalado.
-        try:
+        # Conecta ao Chrome real via CDP (porta 9222) para usar cookies/sessao reais
+        # e passar o reCAPTCHA v3 do portal RFB (que bloqueia Chromium limpo com erro 023).
+        #
+        # Para iniciar o Chrome com depuracao remota, execute UMA VEZ antes de rodar este script:
+        #   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+        #
+        # Se o Chrome nao estiver disponivel na porta 9222, abre um Chrome novo (sem cookies).
+        import subprocess, socket
+
+        def _chrome_disponivel():
+            try:
+                s = socket.create_connection(("127.0.0.1", 9222), timeout=1)
+                s.close()
+                return True
+            except Exception:
+                return False
+
+        browser = None
+        cdp_mode = False
+
+        if _chrome_disponivel():
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                cdp_mode = True
+                print("  [Chrome CDP] Conectado ao Chrome real na porta 9222")
+            except Exception as e:
+                print(f"  [Chrome CDP] Falha ao conectar: {e}")
+
+        if not browser:
+            # Tenta abrir Chrome com depuracao
+            chrome_paths = [
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                r"C:\Users\Alianzo\AppData\Local\Google\Chrome\Application\chrome.exe",
+            ]
+            chrome_exe = next((p_ for p_ in chrome_paths if __import__("os").path.exists(p_)), None)
+            if chrome_exe:
+                subprocess.Popen([
+                    chrome_exe,
+                    "--remote-debugging-port=9222",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                ])
+                time.sleep(4)
+                try:
+                    browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                    cdp_mode = True
+                    print("  [Chrome CDP] Chrome iniciado e conectado")
+                except Exception:
+                    pass
+
+        if not browser:
+            # Ultimo recurso: Chromium padrao
             browser = p.chromium.launch(
                 channel="chrome",
                 headless=args.headless,
                 slow_mo=80,
                 args=["--disable-blink-features=AutomationControlled"],
             )
-        except Exception:
-            browser = p.chromium.launch(
-                headless=args.headless,
-                slow_mo=80,
-                args=["--disable-blink-features=AutomationControlled"],
+
+        if cdp_mode:
+            context = browser.contexts[0] if browser.contexts else browser.new_context(accept_downloads=True)
+            pg = context.new_page()
+        else:
+            context = browser.new_context(accept_downloads=True)
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
-        context = browser.new_context(
-            accept_downloads=True,
-        )
-        context.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
-        pg      = context.new_page()
+            pg = context.new_page()
 
         for i, item in enumerate(lista, 1):
             cnpj_num = _so_numeros(item["cnpj"])
