@@ -129,12 +129,30 @@ def emitir_cnpj(page, context, cnpj_num, output_path, debug=False):
         if debug:
             print(f"  Valor preenchido: {campo_loc.input_value()}")
 
-        # 3. Emitir via JS
-        page.evaluate("""() => {
-            const btn = document.querySelector('button.br-button.primary.btn-acao')
-                     || document.querySelector('button[type="submit"]');
-            if (btn) btn.click();
-        }""")
+        # 3. Emitir — clique real (gera eventos de mouse para reCAPTCHA v3)
+        # Move o mouse pelo campo primeiro para simular comportamento humano
+        try:
+            campo_box = campo_loc.bounding_box()
+            if campo_box:
+                page.mouse.move(campo_box["x"] + 50, campo_box["y"] + 5)
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+        btn_emitir = page.locator(
+            'button.br-button.primary.btn-acao, button[type="submit"]'
+        ).first
+        try:
+            btn_emitir.scroll_into_view_if_needed(timeout=5000)
+            time.sleep(0.4)
+            btn_emitir.click(timeout=8000)
+        except Exception:
+            # Fallback JS se locator falhar
+            page.evaluate("""() => {
+                const btn = document.querySelector('button.br-button.primary.btn-acao')
+                         || document.querySelector('button[type="submit"]');
+                if (btn) btn.click();
+            }""")
         time.sleep(6)
 
         if debug:
