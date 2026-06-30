@@ -673,11 +673,5 @@ def main():
     print("Concluido!")
 
 
-if __name__ == "__main__":
-    main()
-_excel}")
-    print(f"  Word:  {caminho_word}")
-
-
 if __name__ == '__main__':
     main()
