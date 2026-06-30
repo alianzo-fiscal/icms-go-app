@@ -537,7 +537,7 @@ def _processar_apuracao(ent_files, sai_files):
                + ["--entradas"] + ent_paths
                + ["--saidas"]   + sai_paths
                + ["--output",   str(output_path)])
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=str(tmpdir))
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
         stdout = result.stdout or ""
         stderr = result.stderr or ""
         if output_path.exists():
