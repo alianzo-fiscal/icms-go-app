@@ -99,6 +99,10 @@ def carregar_dados(caminhos: list) -> pd.DataFrame:
     if 'PERCICMS' in df.columns:
         df['PERCICMS'] = pd.to_numeric(df['PERCICMS'], errors='coerce').fillna(0).round(2)
 
+    # Garantir VLCONTABIL — fallback para VLITEM se ausente
+    if 'VLCONTABIL' not in df.columns:
+        df['VLCONTABIL'] = df['VLITEM'] if 'VLITEM' in df.columns else 0.0
+
     # Tipo de operação
     df['TIPO_OP'] = 'Intraestadual'
     if 'CODFISCAL' in df.columns:
