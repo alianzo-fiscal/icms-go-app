@@ -312,9 +312,10 @@ def main():
         chrome_exe = next((c for c in chrome_paths if os.path.exists(c)), None)
         chrome_profile = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
 
-        # Encerra Chrome em execucao
-        _sp.run(["taskkill", "/F", "/IM", "chrome.exe"], capture_output=True)
-        time.sleep(2)
+        # Encerra Chrome em execucao (com /T mata a arvore de processos completa)
+        _sp.run(["taskkill", "/F", "/T", "/IM", "chrome.exe"], capture_output=True)
+        _sp.run(["taskkill", "/F", "/T", "/IM", "GoogleCrashHandler.exe"], capture_output=True)
+        time.sleep(3)  # aguarda liberacao completa de portas/perfil
 
         if chrome_exe:
             _sp.Popen([
@@ -327,11 +328,12 @@ def main():
                 "--disable-session-crashed-bubble",
                 "--hide-crash-restore-bubble",
                 "--suppress-message-center-popups",
+                "--disable-extensions-except=",
                 "about:blank",
             ])
             print("  [Chrome] Aguardando Chrome nativo na porta 9222...")
-            # Aguarda Chrome subir (ate 15s)
-            for _ in range(30):
+            # Aguarda Chrome subir (ate 20s) — usa 127.0.0.1 (IPv4, nao ::1)
+            for _ in range(40):
                 try:
                     s = _sock.create_connection(("127.0.0.1", 9222), timeout=0.5)
                     s.close()
@@ -342,7 +344,7 @@ def main():
                 print("  [Chrome] Timeout aguardando porta 9222")
             time.sleep(2)  # estabilizacao adicional
             try:
-                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
                 # Usa contexto existente (perfil do usuario ja carregado)
                 ctx_list = browser.contexts
                 context = ctx_list[0] if ctx_list else browser.new_context(accept_downloads=True)
