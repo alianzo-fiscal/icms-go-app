@@ -298,57 +298,72 @@ def main():
     resultados = []
 
     with sync_playwright() as p:
-        # Usa launch_persistent_context com o perfil REAL do Chrome do usuario.
-        # Isso carrega cookies, historico e sessao reCAPTCHA — essencial para passar
-        # o reCAPTCHA v3 do portal RFB (que bloqueia browsers limpos com erro 023).
-        import os
+        # Lanca Chrome nativo via subprocess com perfil real + porta de debug.
+        # Isso evita os flags de automacao que o Playwright adiciona ao lancar ele mesmo,
+        # e garante que o Chrome use o perfil completo do usuario (cookies, sessao Google,
+        # historico de navegacao) — essencial para passar o reCAPTCHA v3 do portal RFB.
+        import os, subprocess as _sp, socket as _sock
 
-        # Perfil padrao do Chrome no Windows
-        chrome_profile = os.path.expandvars(
-            r"%LOCALAPPDATA%\Google\Chrome\User Data"
-        )
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+        chrome_exe = next((c for c in chrome_paths if os.path.exists(c)), None)
+        chrome_profile = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
 
-        # Fecha Chrome antes de abrir com perfil persistente
-        # (perfil fica travado enquanto Chrome esta aberto)
-        import subprocess as _sp
+        # Encerra Chrome em execucao
         _sp.run(["taskkill", "/F", "/IM", "chrome.exe"], capture_output=True)
         time.sleep(2)
-        print("  [Chrome] Chrome encerrado, abrindo com perfil de automacao...")
 
-        try:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=chrome_profile,
-                channel="chrome",
-                headless=args.headless,
-                slow_mo=80,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "--no-restore-last-session",          # nao mostra "Restaurar paginas?"
-                    "--disable-session-crashed-bubble",   # suprime popup de crash
-                    "--hide-crash-restore-bubble",        # Chrome 116+
-                    "--suppress-message-center-popups",
-                ],
-                accept_downloads=True,
-            )
-            # Mascara navigator.webdriver mesmo com perfil real
-            context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                window.chrome = { runtime: {} };
-                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
-                Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR','pt','en-US','en']});
-            """)
-            print("  [Chrome] Usando perfil real do Chrome (com cookies/sessao)")
-        except Exception as e:
-            print(f"  [Chrome] Perfil ocupado ou erro ({e}) — usando contexto limpo")
-            browser = p.chromium.launch(
+        if chrome_exe:
+            _sp.Popen([
+                chrome_exe,
+                "--remote-debugging-port=9222",
+                f"--user-data-dir={chrome_profile}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--no-restore-last-session",
+                "--disable-session-crashed-bubble",
+                "--hide-crash-restore-bubble",
+                "--suppress-message-center-popups",
+                "about:blank",
+            ])
+            print("  [Chrome] Aguardando Chrome nativo na porta 9222...")
+            # Aguarda Chrome subir (ate 15s)
+            for _ in range(30):
+                try:
+                    s = _sock.create_connection(("127.0.0.1", 9222), timeout=0.5)
+                    s.close()
+                    break
+                except Exception:
+                    time.sleep(0.5)
+            else:
+                print("  [Chrome] Timeout aguardando porta 9222")
+            time.sleep(2)  # estabilizacao adicional
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                # Usa contexto existente (perfil do usuario ja carregado)
+                ctx_list = browser.contexts
+                context = ctx_list[0] if ctx_list else browser.new_context(accept_downloads=True)
+                print("  [Chrome] Conectado via CDP ao Chrome nativo com perfil real")
+                cdp_ok = True
+            except Exception as e:
+                print(f"  [Chrome] Falha CDP: {e}")
+                cdp_ok = False
+        else:
+            cdp_ok = False
+
+        if not cdp_ok:
+            # Fallback: Chrome via Playwright (sem perfil real)
+            print("  [Chrome] Fallback: Playwright channel=chrome (sem perfil real)")
+            browser2 = p.chromium.launch(
                 channel="chrome",
                 headless=args.headless,
                 slow_mo=80,
                 args=["--disable-blink-features=AutomationControlled"],
             )
-            context = browser.new_context(accept_downloads=True)
+            context = browser2.new_context(accept_downloads=True)
             context.add_init_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
             )
