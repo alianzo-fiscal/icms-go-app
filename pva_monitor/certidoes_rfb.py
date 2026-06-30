@@ -261,8 +261,26 @@ def main():
     if args.headless:
         options.add_argument("--headless=new")
 
+    # Detecta versao do Chrome para garantir ChromeDriver compativel
+    import subprocess as _sp2, re as _re
+    _chrome_ver = None
+    for _cpath in [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+    ]:
+        if os.path.exists(_cpath):
+            try:
+                _out = _sp2.run([_cpath, "--version"], capture_output=True, text=True).stdout
+                _m = _re.search(r"(\d+)\.", _out)
+                if _m:
+                    _chrome_ver = int(_m.group(1))
+            except Exception:
+                pass
+            break
+    print(f"  [Chrome] Versao detectada: {_chrome_ver}")
     print("  [Chrome] Iniciando com undetected_chromedriver...")
-    driver = uc.Chrome(options=options, use_subprocess=True)
+    driver = uc.Chrome(options=options, use_subprocess=True, version_main=_chrome_ver)
     driver.implicitly_wait(5)
 
     # Injeta interceptor de fetch em todas as paginas (persiste via CDP)
