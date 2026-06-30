@@ -403,6 +403,7 @@ with st.sidebar:
             "🔭 Imersão Fiscal",
             "📊 Análise Fiscal",
             "🧮 Apuração Mensal",
+            "🗂️ XML x Movimentação",
             "📂 SPED / PVA",
             "💰 Guias ICMS",
             "📜 Certidões",
@@ -2214,6 +2215,38 @@ elif _pagina == "📅 Agenda do Líder":
                         "prazo": _t_prazo, "status": _t_stat,
                     })
                     st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PÁGINA: XML x Movimentação
+elif _pagina == "\U0001f5c2️ XML x Movimentação":
+    _header("\U0001f5c2️", f"XML x Movimentação — {_EMP_LABELS.get(_empresa, _empresa)}",
+            "Cruzamento de NF-e XML com movimentação fiscal do ERP")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        xml_files = st.file_uploader(
+            "XMLs de NF-e (.xml)",
+            type=["xml"],
+            accept_multiple_files=True,
+            help="Arquivos XML das notas fiscais eletrônicas",
+            key="xml_upload",
+        )
+    with col_b:
+        mov_xml_files = st.file_uploader(
+            "Movimentação ERP (XLS / XLSX / CSV)",
+            type=["xls", "xlsx", "csv"],
+            accept_multiple_files=True,
+            help="Mesmo formato usado na Análise Fiscal",
+            key="mov_xml_upload",
+        )
+
+    if xml_files or mov_xml_files:
+        c1, c2 = st.columns(2)
+        c1.metric("XMLs carregados", len(xml_files) if xml_files else 0)
+        c2.metric("Arquivos ERP carregados", len(mov_xml_files) if mov_xml_files else 0)
+
+    st.info("⏳ Funcionalidade de cruzamento em implementação. Em breve disponível.")
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────
