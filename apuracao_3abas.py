@@ -191,14 +191,25 @@ def calc_difal_sai(sai):
             'base_total': float(grp.sum()), 'base_pf': grp}
 
 def calc_protege(sai):
-    # PROTEGE 15% sobre intervalo CST 20
-    m20 = sai['_CST'] == '20'
-    intervalo = (sai.loc[m20,'_VLITEM'] - sai.loc[m20,'_VLBASE']).clip(lower=0)
-    p15_f = sai[m20].groupby('_FILIAL').apply(lambda x: float(((x['_VLITEM']-x['_VLBASE']).clip(lower=0)*0.15).sum()))
-    # PROTEGE 2% cosmeticos + NCM 3401/3402
-    ncm3 = sai['_NCM'].str[:4].isin([n[:4] for n in NCM_COSMET])
-    m2 = ncm3 & sai['_CST'].isin(['00','10','20'])
-    p2_f = sai[m2].groupby('_FILIAL')['_VLCONT'].sum() * 0.02
+    # PROTEGE 15%: base reduzida com alíquota efetiva ≈ 11%
+    # (redução de 19% para 11% ou de 12% para 11%) — usar alíquota efetiva, não só CST 20
+    s = sai.copy()
+    s['_ALIQ_EF'] = np.where(
+        s['_VLCONT'] > 0,
+        (s['_VLBASE'] / s['_VLCONT']) * s['_PERCICMS'],
+        s['_PERCICMS']
+    )
+    m_p15 = (
+        (s['_ALIQ_EF'] >= 10.0) & (s['_ALIQ_EF'] <= 11.9) &
+        s['_PERCICMS'].isin([19.0, 12.0])
+    )
+    p15_f = s[m_p15].groupby('_FILIAL').apply(
+        lambda x: float(((x['_VLCONT'] - x['_VLBASE']).clip(lower=0) * 0.15).sum())
+    )
+    # PROTEGE 2%: todas as saídas com alíquota 21%
+    m_p2 = s['_PERCICMS'] == 21.0
+    p2_f = s[m_p2].groupby('_FILIAL')['_VLCONT'].sum() * 0.02
+    del s
     return {
         'total': float(p15_f.sum()) + float(p2_f.sum()),
         'p15_por_filial': p15_f, 'p15_total': float(p15_f.sum()),
@@ -230,6 +241,70 @@ def base_entradas(ent):
         '_FILIAL':'FILIAL','_PROD':'COD_PRODUTO','_DESC':'DESCRICAO',
         '_NCM':'NCM','_CFOP':'CFOP','_CST':'CST','_ORIG':'ORIGEM','_PERCICMS':'ALIQ_PCT'
     })
+
+
+def _agg_sai(sai, mask):
+    """Agrupa saídas filtradas pelo mask no padrão KEYS_SAI."""
+    return sai[mask].groupby(KEYS_SAI, dropna=False).agg(
+        QTD=('_QTCONT','sum'), VL_ITEM=('_VLITEM','sum'),
+        VL_CONTABIL=('_VLCONT','sum'), BASE_ICMS=('_VLBASE','sum'),
+        ICMS=('_VLICMS','sum'), N_NOTAS=('_NUMNOTA','nunique')
+    ).reset_index().rename(columns={
+        '_FILIAL':'FILIAL','_PROD':'COD_PRODUTO','_DESC':'DESCRICAO',
+        '_NCM':'NCM','_CFOP':'CFOP','_CST':'CST','_ORIG':'ORIGEM','_PERCICMS':'ALIQ_PCT'
+    })
+
+
+def _base_difal_saida(sai):
+    """Saídas interestaduais — base DIFAL EC 87/2015"""
+    mask = sai['_CFOP'].str.startswith('6') & sai['_CST'].isin(['00','20']) & (sai['_VLBASE'] > 0)
+    df = _agg_sai(sai, mask)
+    df['DIFAL_SAIDA'] = (df['BASE_ICMS'] * ALIQ_DIFAL_SAI / 100).round(2)
+    return df
+
+
+def _base_protege15(sai):
+    """Base PROTEGE 15% — alíq. efetiva ≈ 11% (nominal 19% ou 12%)"""
+    s = sai.copy()
+    s['_ALIQ_EF'] = np.where(
+        s['_VLCONT'] > 0,
+        (s['_VLBASE'] / s['_VLCONT']) * s['_PERCICMS'],
+        s['_PERCICMS']
+    )
+    mask = (
+        (s['_ALIQ_EF'] >= 10.0) & (s['_ALIQ_EF'] <= 11.9) &
+        s['_PERCICMS'].isin([19.0, 12.0])
+    )
+    df = _agg_sai(s, mask)
+    df['INTERVALO']     = (df['VL_CONTABIL'] - df['BASE_ICMS']).clip(lower=0).round(2)
+    df['PROTEGE_15PCT'] = (df['INTERVALO'] * 0.15).round(2)
+    del s
+    return df
+
+
+def _base_protege2(sai):
+    """Base PROTEGE 2% — todas as saídas com alíquota 21%"""
+    mask = sai['_PERCICMS'] == 21.0
+    df = _agg_sai(sai, mask)
+    df['PROTEGE_2PCT'] = (df['VL_CONTABIL'] * 0.02).round(2)
+    return df
+
+
+def _base_icms_comp(sai):
+    """Base ICMS Complementar CFOP 5949 — 19% sobre VL_CONTABIL"""
+    mask = sai['_CFOP'] == '5949'
+    df = _agg_sai(sai, mask)
+    df['ICMS_COMPLEMENTAR'] = (df['VL_CONTABIL'] * ALIQ_INT_GO / 100).round(2)
+    return df
+
+
+def _base_estorno(sai):
+    """Base Estorno CFOP 5927 — 12% sobre BASE_ICMS"""
+    mask = sai['_CFOP'] == '5927'
+    df = _agg_sai(sai, mask)
+    df['ICMS_ESTORNO'] = (df['BASE_ICMS'] * ALIQ_INTER_NAC / 100).round(2)
+    return df
+
 
 # ---------------------------------------------------------------------------
 # Geracao da Aba 1 - APURACAO ICMS
@@ -363,8 +438,8 @@ def gerar_apuracao(output_path, periodo, filiais, debito, credito, difal_e, difa
 
     # VI - PROTEGE
     titulo_bloco(row, 'VI.  PROTEGE/GO - FUNDO SOCIAL (Lei 13.446/99)'); row += 1
-    linha(row, 'PROTEGE 15% s/Intervalo CST 20', protege.get('p15_por_filial',{}), protege.get('p15_total',0)); row += 1
-    linha(row, 'PROTEGE 2% s/Valor - Cosmeticos + NCM 3401/3402', protege.get('p2_por_filial',{}), protege.get('p2_total',0)); row += 1
+    linha(row, 'PROTEGE 15% s/Intervalo (Aliq. Efetiva 11% — nominal 19% ou 12%)', protege.get('p15_por_filial',{}), protege.get('p15_total',0)); row += 1
+    linha(row, 'PROTEGE 2% s/Valor — Todas as saidas com Aliquota 21%', protege.get('p2_por_filial',{}), protege.get('p2_total',0)); row += 1
     linha(row, 'TOTAL PROTEGE A RECOLHER',
           {f: protege.get('p15_por_filial',{}).get(f,0)+protege.get('p2_por_filial',{}).get(f,0) for f in fils},
           protege.get('total',0), True, C_YELL); row += 1
@@ -390,9 +465,14 @@ COL_WIDTHS = {'FILIAL':10,'COD_PRODUTO':14,'DESCRICAO':40,'NCM':12,'CFOP':8,
               'CST':7,'ORIGEM':8,'ALIQ_PCT':10,'QTD':12,'VL_ITEM':16,
               'VL_CONTABIL':16,'BASE_ICMS':16,'ICMS':16,'N_NOTAS':10}
 
-def _header_row(ws):
+NUM_COLS_EXTRA = {'DIFAL_SAIDA','INTERVALO','PROTEGE_15PCT','PROTEGE_2PCT',
+                  'ICMS_COMPLEMENTAR','ICMS_ESTORNO'}
+
+def _header_row(ws, cols=None):
+    if cols is None:
+        cols = COLS_BASE
     cells = []
-    for col in COLS_BASE:
+    for col in cols:
         c = WriteOnlyCell(ws, value=col)
         c.font = Font(bold=True, color='FFFFFF', size=10)
         c.fill = PatternFill('solid', fgColor=C_HEAD)
@@ -400,10 +480,13 @@ def _header_row(ws):
         cells.append(c)
     return cells
 
-def _total_row(ws, df):
+def _total_row(ws, df, cols=None):
+    if cols is None:
+        cols = COLS_BASE
+    all_num = NUM_COLS_BASE | NUM_COLS_EXTRA
     cells = []
-    for col in COLS_BASE:
-        if col in NUM_COLS_BASE:
+    for col in cols:
+        if col in all_num:
             try:
                 val = round(float(df[col].sum()), 2)
             except:
@@ -419,15 +502,18 @@ def _total_row(ws, df):
         cells.append(c)
     return cells
 
-def gerar_bases(output_path, periodo, base_ent, base_sai):
+def gerar_bases(output_path, periodo, base_ent, base_sai,
+                base_difal=None, base_p15=None, base_p2=None,
+                base_comp=None, base_estorno=None):
     wb = Workbook(write_only=True)
 
-    def _escrever_aba(nome, titulo, df, tab_color):
+    def _escrever_aba(nome, titulo, df, tab_color, cols=None):
+        if cols is None:
+            cols = COLS_BASE
         ws = wb.create_sheet(nome)
         ws.sheet_properties.tabColor = tab_color
-        # set_column nao existe em write_only - usar column_dimensions
-        for i, col in enumerate(COLS_BASE):
-            ws.column_dimensions[get_column_letter(i+1)].width = COL_WIDTHS.get(col, 12)
+        for i, col in enumerate(cols):
+            ws.column_dimensions[get_column_letter(i+1)].width = COL_WIDTHS.get(col, 16)
         # Titulo (linha 1)
         tc = WriteOnlyCell(ws, value=titulo)
         tc.font = Font(bold=True, color='FFFFFF', size=12)
@@ -435,16 +521,23 @@ def gerar_bases(output_path, periodo, base_ent, base_sai):
         tc.alignment = Alignment(horizontal='center', vertical='center')
         ws.append([tc])
         # Cabecalho (linha 2)
-        ws.append(_header_row(ws))
-        # Dados - escrever como listas simples (sem formatacao por celula = mais rapido)
+        ws.append(_header_row(ws, cols))
+        # Dados
         n = len(df)
-        for i, row in enumerate(df[COLS_BASE].itertuples(index=False)):
+        df_out = df[[c for c in cols if c in df.columns]]
+        for i, row in enumerate(df_out.itertuples(index=False)):
             ws.append(list(row))
             if i > 0 and i % 50000 == 0:
                 print('    ' + nome + ': ' + str(i) + '/' + str(n) + ' linhas...', flush=True)
         # Total
-        ws.append(_total_row(ws, df))
+        ws.append(_total_row(ws, df, cols))
         print('    ' + nome + ': ' + str(n) + ' linhas concluidas', flush=True)
+
+    COLS_DIFAL = COLS_BASE + ['DIFAL_SAIDA']
+    COLS_P15   = COLS_BASE + ['INTERVALO', 'PROTEGE_15PCT']
+    COLS_P2    = COLS_BASE + ['PROTEGE_2PCT']
+    COLS_COMP  = COLS_BASE + ['ICMS_COMPLEMENTAR']
+    COLS_EST   = COLS_BASE + ['ICMS_ESTORNO']
 
     if len(base_ent) > 0:
         print('  Escrevendo BASE ENTRADAS (' + str(len(base_ent)) + ' linhas)...', flush=True)
@@ -458,8 +551,33 @@ def gerar_bases(output_path, periodo, base_ent, base_sai):
         del base_sai
         gc.collect()
 
+    if base_difal is not None and len(base_difal) > 0:
+        print('  Escrevendo BASE DIFAL (' + str(len(base_difal)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE DIFAL', 'BASE DIFAL SAIDA EC87/2015 - ' + periodo, base_difal, '7030A0', COLS_DIFAL)
+        del base_difal; gc.collect()
+
+    if base_p15 is not None and len(base_p15) > 0:
+        print('  Escrevendo BASE PROTEGE 15% (' + str(len(base_p15)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE PROTEGE 15%', 'BASE PROTEGE 15% - Aliq. Efetiva 11% - ' + periodo, base_p15, 'C00000', COLS_P15)
+        del base_p15; gc.collect()
+
+    if base_p2 is not None and len(base_p2) > 0:
+        print('  Escrevendo BASE PROTEGE 2% (' + str(len(base_p2)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE PROTEGE 2%', 'BASE PROTEGE 2% - Saidas Aliq. 21% - ' + periodo, base_p2, 'FF7C00', COLS_P2)
+        del base_p2; gc.collect()
+
+    if base_comp is not None and len(base_comp) > 0:
+        print('  Escrevendo BASE ICMS COMPL 5949 (' + str(len(base_comp)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE ICMS COMPL 5949', 'BASE ICMS COMPLEMENTAR CFOP 5949 (19%) - ' + periodo, base_comp, '00B050', COLS_COMP)
+        del base_comp; gc.collect()
+
+    if base_estorno is not None and len(base_estorno) > 0:
+        print('  Escrevendo BASE ESTORNO 5927 (' + str(len(base_estorno)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE ESTORNO 5927', 'BASE ESTORNO CFOP 5927 (12%) - ' + periodo, base_estorno, '833C00', COLS_EST)
+        del base_estorno; gc.collect()
+
     wb.save(output_path)
-    print('  Abas 2+3 bases salvas: ' + Path(output_path).name, flush=True)
+    print('  Abas bases salvas: ' + Path(output_path).name, flush=True)
 
 # ---------------------------------------------------------------------------
 # Main
@@ -521,10 +639,20 @@ def main():
     protege = calc_protege(sai)  if len(sai) > 0 else {}
 
     print('Consolidando bases...', flush=True)
-    base_sai_df = base_saidas(sai) if len(sai) > 0 else pd.DataFrame()
-    base_ent_df = base_entradas(ent) if len(ent) > 0 else pd.DataFrame()
+    base_sai_df  = base_saidas(sai)        if len(sai) > 0 else pd.DataFrame()
+    base_ent_df  = base_entradas(ent)      if len(ent) > 0 else pd.DataFrame()
+    base_difal_df = _base_difal_saida(sai) if len(sai) > 0 else pd.DataFrame()
+    base_p15_df   = _base_protege15(sai)   if len(sai) > 0 else pd.DataFrame()
+    base_p2_df    = _base_protege2(sai)    if len(sai) > 0 else pd.DataFrame()
+    base_comp_df  = _base_icms_comp(sai)   if len(sai) > 0 else pd.DataFrame()
+    base_est_df   = _base_estorno(sai)     if len(sai) > 0 else pd.DataFrame()
     print('  BASE SAIDAS: ' + str(len(base_sai_df)) + ' linhas', flush=True)
     print('  BASE ENTRADAS: ' + str(len(base_ent_df)) + ' linhas', flush=True)
+    print('  BASE DIFAL: ' + str(len(base_difal_df)) + ' linhas', flush=True)
+    print('  BASE PROTEGE 15%: ' + str(len(base_p15_df)) + ' linhas', flush=True)
+    print('  BASE PROTEGE 2%: ' + str(len(base_p2_df)) + ' linhas', flush=True)
+    print('  BASE ICMS COMP 5949: ' + str(len(base_comp_df)) + ' linhas', flush=True)
+    print('  BASE ESTORNO 5927: ' + str(len(base_est_df)) + ' linhas', flush=True)
 
     # Liberar DataFrames brutos
     del sai, ent
@@ -542,9 +670,11 @@ def main():
         tmp_apur, periodo, fils, debito, credito, difal_e, difal_s, protege
     )
 
-    print('\nGerando Abas 2+3 - BASES...', flush=True)
-    gerar_bases(tmp_base, periodo, base_ent_df, base_sai_df)
-    del base_sai_df, base_ent_df
+    print('\nGerando Abas de BASES...', flush=True)
+    gerar_bases(tmp_base, periodo, base_ent_df, base_sai_df,
+                base_difal=base_difal_df, base_p15=base_p15_df,
+                base_p2=base_p2_df, base_comp=base_comp_df, base_estorno=base_est_df)
+    del base_sai_df, base_ent_df, base_difal_df, base_p15_df, base_p2_df, base_comp_df, base_est_df
     gc.collect()
 
     # Combinar os dois arquivos
