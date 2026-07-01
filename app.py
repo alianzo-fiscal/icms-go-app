@@ -2752,4 +2752,79 @@ elif _pagina == "📅 Agenda do Líder":
                 dias = (ev["data"] - hoje).days
                 st.markdown(f"""
                 <div class="agenda-card">
-                    <h4>{_cor
+                    <h4>{_cores.get(ev.get("tipo","revisao"),"🟢")} {ev["evento"]}</h4>
+                    <p class="meta">
+                        📅 {ev['data'].strftime('%d/%m/%Y')} &nbsp;·&nbsp;
+                        ⏳ {'Hoje!' if dias == 0 else f'{abs(dias)} dias'} &nbsp;·&nbsp;
+                        👤 {ev.get('responsavel', '—')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ── ABA LIDERADOS ─────────────────────────────────────────────────────────
+    with tab_liderados:
+        _section("👥 Liderados — Acompanhamento Individual")
+        st.info(
+            "📋 **Em construção.** "
+            "Esta aba exibirá o painel de acompanhamento individual dos liderados: "
+            "check-ins, metas, feedbacks e histórico de conversas 1:1."
+        )
+        _section("🗒️ Anotações rápidas")
+        _liderados = [
+            "Sara Felix",
+            "Equipe Fiscal GO",
+            "Equipe SPED",
+            "Equipe Federal",
+        ]
+        for _nome in _liderados:
+            with st.expander(f"👤 {_nome}", expanded=False):
+                _nota = st.text_area(
+                    f"Anotações — {_nome}",
+                    key=f"nota_{_nome.lower().replace(' ', '_')}",
+                    height=80,
+                    label_visibility="collapsed",
+                    placeholder=f"Anotações sobre {_nome}...",
+                )
+
+    # ── ABA TAREFAS & PRAZOS ──────────────────────────────────────────────────
+    with tab_tarefas:
+        _section("✅ Tarefas & Prazos — Acompanhamento")
+        st.info(
+            "📋 **Em construção.** "
+            "Esta aba exibirá tarefas abertas, prazos críticos e status de entregáveis "
+            "da equipe fiscal."
+        )
+        _section("📌 Tarefas manuais")
+        if "tarefas_manuais" not in st.session_state:
+            st.session_state["tarefas_manuais"] = []
+        with st.form("form_tarefa"):
+            ft1, ft2, ft3 = st.columns([3, 1, 1])
+            with ft1:
+                _desc_t = st.text_input("Descrição da tarefa")
+            with ft2:
+                _prazo_t = st.date_input("Prazo", value=_dt.date.today() + _dt.timedelta(days=7))
+            with ft3:
+                _resp_t = st.text_input("Responsável")
+            if st.form_submit_button("Adicionar tarefa", type="primary"):
+                if _desc_t.strip():
+                    st.session_state["tarefas_manuais"].append({
+                        "desc": _desc_t, "prazo": _prazo_t,
+                        "resp": _resp_t, "feito": False,
+                    })
+                    st.success(f"✅ Tarefa adicionada.")
+
+        if st.session_state["tarefas_manuais"]:
+            _section("📋 Lista de Tarefas")
+            for i, t in enumerate(st.session_state["tarefas_manuais"]):
+                col_chk, col_txt = st.columns([0.08, 0.92])
+                with col_chk:
+                    t["feito"] = st.checkbox("", value=t["feito"], key=f"chk_{i}")
+                with col_txt:
+                    dias_t = (t["prazo"] - _dt.date.today()).days
+                    cor_t = "🔴" if dias_t <= 0 else ("🟡" if dias_t <= 3 else "🟢")
+                    _estilo = "text-decoration:line-through;color:#aaa" if t["feito"] else ""
+                    st.markdown(
+                        f'<span style="{_estilo}">{cor_t} **{t["desc"]}** — '
+                        f'📅 {t["prazo"].strftime("%d/%m/%Y")} · 👤 {t["resp"] or "—"}</span>',
+                        unsafe_allow_html=True,
+                    )
