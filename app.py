@@ -485,7 +485,7 @@ def _processar_entradas(uploaded_files):
         divs = {"DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
                 "DIV3": ae.calcular_div3(inter), "DIV4": ae.calcular_div4(inter),
                 "DIV5": ae.calcular_div5(inter)}
-        nome_base  = f"Analise Entradas ICMS GO - {periodo}"
+        nome_base  = f"Analise Entradas ICMS - {periodo}"
         excel_path = tmpdir / f"{nome_base}.xlsx"
         word_path  = tmpdir / f"{nome_base}.docx"
         ae.gerar_excel(df, divs, periodo, excel_path)
@@ -512,7 +512,7 @@ def _processar_saidas(uploaded_files):
                 "DIV5": as_.calcular_div5(df), "DIV6": as_.calcular_div6(inter),
                 "DIV7": as_.calcular_div7(df)}
         grp = as_.calcular_base_consolidada(df)
-        nome_base  = f"Analise Saidas ICMS GO - {periodo}"
+        nome_base  = f"Analise Saidas ICMS - {periodo}"
         excel_path = tmpdir / f"{nome_base}.xlsx"
         word_path  = tmpdir / f"{nome_base}.docx"
         as_.gerar_excel(df, divs, grp, periodo, excel_path)
