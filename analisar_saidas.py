@@ -615,7 +615,7 @@ def gerar_word(df: pd.DataFrame, divs_dict: dict, periodo: str, caminho_word: Pa
     doc.add_paragraph()
     p = doc.add_paragraph(
         f'Gerado automaticamente em {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")} '
-        f'— Especialista em Apuração de ICMS Goiás'
+        f'— Especialista em Apuração de ICMS'
     )
     p.runs[0].font.size = Pt(8)
     p.runs[0].font.color.rgb = RGBColor(0x55, 0x55, 0x55)
@@ -661,8 +661,8 @@ def main():
 
     grp = calcular_base_consolidada(df)
 
-    caminho_excel = PASTA_SAIDA / f"Analise Saidas ICMS GO - {periodo}.xlsx"
-    caminho_word  = PASTA_SAIDA / f"Analise Saidas ICMS GO - {periodo}.docx"
+    caminho_excel = PASTA_SAIDA / f"Analise Saidas ICMS - {periodo}.xlsx"
+    caminho_word  = PASTA_SAIDA / f"Analise Saidas ICMS - {periodo}.docx"
 
     print(f"Gerando Excel: {caminho_excel}")
     gerar_excel(df, divs, grp, periodo, caminho_excel)
