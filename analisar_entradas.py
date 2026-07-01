@@ -656,7 +656,7 @@ def gerar_word(df, divs_dict, periodo, caminho_word):
     doc.add_paragraph()
     p_rod = doc.add_paragraph(
         f'Gerado automaticamente em {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}'
-        f' — Especialista em Apuração de ICMS Goiás'
+        f' — Especialista em Apuração de ICMS'
     )
     if p_rod.runs:
         p_rod.runs[0].font.size = Pt(8)
@@ -693,8 +693,8 @@ def main():
         n = len(v) if v is not None and not v.empty else 0
         print(f'  {k}: {n} registros')
 
-    caminho_excel = PASTA_SAIDA / f'Analise Entradas ICMS GO - {periodo}.xlsx'
-    caminho_word = PASTA_SAIDA / f'Analise Entradas ICMS GO - {periodo}.docx'
+    caminho_excel = PASTA_SAIDA / f'Analise Entradas ICMS - {periodo}.xlsx'
+    caminho_word = PASTA_SAIDA / f'Analise Entradas ICMS - {periodo}.docx'
 
     print(f'Gerando Excel: {caminho_excel.name}')
     gerar_excel(df, divs, periodo, caminho_excel)
