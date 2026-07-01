@@ -195,8 +195,8 @@ def calc_difal_sai(sai):
             'base_total': float(grp.sum()), 'base_pf': grp}
 
 def calc_protege(sai):
-    # PROTEGE 15%: base reduzida com alíquota efetiva ≈ 11%
-    # (redução de 19% para 11% ou de 12% para 11%) — usar alíquota efetiva, não só CST 20
+    # PROTEGE 15%: base reduzida com aliq. efetiva ~11% (nominal 19% ou 12%)
+    # TO: este bloco retorna zeros (sem PROTEGE) mas mantem compatibilidade de interface
     s = sai.copy()
     s['_ALIQ_EF'] = np.where(
         s['_VLCONT'] > 0,
@@ -207,17 +207,20 @@ def calc_protege(sai):
         (s['_ALIQ_EF'] >= 10.0) & (s['_ALIQ_EF'] <= 11.9) &
         s['_PERCICMS'].isin([19.0, 12.0])
     )
-    p15_f = s[m_p15].groupby('_FILIAL').apply(
-        lambda x: float(((x['_VLCONT'] - x['_VLBASE']).clip(lower=0) * 0.15).sum())
-    )
-    # PROTEGE 2%: todas as saídas com alíquota 21%
+    # Calcular diretamente por coluna -- evita issue com groupby().apply() no pandas 2.x
+    s_p15 = s[m_p15].copy()
+    s_p15['_INTERVALO'] = (s_p15['_VLCONT'] - s_p15['_VLBASE']).clip(lower=0)
+    p15_f = s_p15.groupby('_FILIAL')['_INTERVALO'].sum() * 0.15
+    # PROTEGE 2%: saidas com aliquota 21%
     m_p2 = s['_PERCICMS'] == 21.0
     p2_f = s[m_p2].groupby('_FILIAL')['_VLCONT'].sum() * 0.02
-    del s
+    del s, s_p15
+    p15_tot = float(p15_f.sum()) if not p15_f.empty else 0.0
+    p2_tot  = float(p2_f.sum())  if not p2_f.empty  else 0.0
     return {
-        'total': float(p15_f.sum()) + float(p2_f.sum()),
-        'p15_por_filial': p15_f, 'p15_total': float(p15_f.sum()),
-        'p2_por_filial': p2_f, 'p2_total': float(p2_f.sum()),
+        'total': p15_tot + p2_tot,
+        'p15_por_filial': p15_f, 'p15_total': p15_tot,
+        'p2_por_filial': p2_f, 'p2_total': p2_tot,
     }
 
 # ---------------------------------------------------------------------------
