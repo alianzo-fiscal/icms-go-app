@@ -33,6 +33,10 @@ ALIQ_DIFAL_SAI = 5.0   # 17% media destinos - 12% GO
 
 CFOP_DIFAL_ENT = {'2551','2556','2910','2949','2923','1551','1556'}
 CFOP_SEM_CRED  = {'1908','1933','1551','2551'}
+# Transferencias e devoluções: excluir do DIFAL saida EC87/2015
+CFOP_EXCL_DIFAL_SAI = {'6151','6152','6153','6154','6155','6156',
+                        '6201','6202','6208','6209','6210',
+                        '6901','6902','6903','6949','6927'}
 NCM_COSMET     = {'3303','3304','3305','3306','3307','3401','3402'}
 NCM_COSMET_FULL= {'33030000','33041000','33042000','33043000','33049010',
                   '33049090','33051000','33052000','33053000','33059010',
@@ -184,7 +188,8 @@ def calc_difal_ent(ent):
             'base_total': float(grp_base.sum()), 'base_pf': grp_base}
 
 def calc_difal_sai(sai):
-    mask    = sai['_CFOP'].str.startswith('6') & sai['_CST'].isin(['00','20']) & (sai['_VLBASE'] > 0)
+    mask    = (sai['_CFOP'].str.startswith('6') & sai['_CST'].isin(['00','20'])
+             & (sai['_VLBASE'] > 0) & (~sai['_CFOP'].isin(CFOP_EXCL_DIFAL_SAI)))
     grp     = sai[mask].groupby('_FILIAL')['_VLBASE'].sum()
     difal_f = grp * (ALIQ_DIFAL_SAI/100)
     return {'total': float(difal_f.sum()), 'por_filial': difal_f,
@@ -257,7 +262,8 @@ def _agg_sai(sai, mask):
 
 def _base_difal_saida(sai):
     """Saídas interestaduais — base DIFAL EC 87/2015"""
-    mask = sai['_CFOP'].str.startswith('6') & sai['_CST'].isin(['00','20']) & (sai['_VLBASE'] > 0)
+    mask = (sai['_CFOP'].str.startswith('6') & sai['_CST'].isin(['00','20'])
+           & (sai['_VLBASE'] > 0) & (~sai['_CFOP'].isin(CFOP_EXCL_DIFAL_SAI)))
     df = _agg_sai(sai, mask)
     df['DIFAL_SAIDA'] = (df['BASE_ICMS'] * ALIQ_DIFAL_SAI / 100).round(2)
     return df
