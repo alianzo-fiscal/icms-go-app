@@ -31,7 +31,7 @@ ALIQ_INTER_NAC = 12.0
 ALIQ_INTER_IMP = 4.0
 ALIQ_DIFAL_SAI = 5.0   # 17% media destinos - 12% GO
 
-CFOP_DIFAL_ENT = {'2551','2556','2910','2949','2923','1551','1556'}
+CFOP_DIFAL_ENT = {'2551','2556','2910','2949','1551','1556'}
 CFOP_SEM_CRED  = {'1908','1933','1551','2551'}
 # Transferencias e devoluções: excluir do DIFAL saida EC87/2015
 CFOP_EXCL_DIFAL_SAI = {'6151','6152','6153','6154','6155','6156',
@@ -386,7 +386,7 @@ def gerar_apuracao(output_path, periodo, filiais, debito, credito, difal_e, difa
     ws.row_dimensions[1].height = 32
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
     c = ws['A1']
-    c.value = 'APURACAO DE ICMS - GOIAS  |  ' + periodo
+    c.value = 'APURACAO DE ICMS  |  ' + periodo
     c.font = _font(True, 'FFFFFF', 14)
     c.fill = _fill(C_DARK)
     c.alignment = _align()
@@ -620,7 +620,7 @@ def gerar_bases(output_path, periodo, base_ent, base_sai,
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description='Apuracao ICMS GO - 3 abas')
+    parser = argparse.ArgumentParser(description='Apuracao ICMS - 3 abas')
     parser.add_argument('--saidas',   nargs='+', default=[])
     parser.add_argument('--entradas', nargs='+', default=[])
     parser.add_argument('--output',   default=None)
@@ -632,7 +632,7 @@ def main():
     pade = args.entradas or [str(pasta/'entrada*.xls'), str(pasta/'Entrada*.xls')]
 
     print('=' * 60, flush=True)
-    print('  Apuracao ICMS - Goias (3 abas)', flush=True)
+    print('  Apuracao ICMS (3 abas)', flush=True)
     print('=' * 60, flush=True)
 
     print('\nCarregando saidas...', flush=True)
@@ -698,7 +698,7 @@ def main():
     gc.collect()
 
     periodo_nome = periodo.replace('/', ' ')
-    output = args.output or str(pasta / ('Apuracao ICMS GO - ' + periodo_nome + '.xlsx'))
+    output = args.output or str(pasta / ('Apuracao ICMS - ' + periodo_nome + '.xlsx'))
 
     # Arquivo temporario para apuracao (aba 1)
     tmp_apur = output.replace('.xlsx', '_tmp_apur.xlsx')
