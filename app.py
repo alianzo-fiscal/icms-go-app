@@ -704,6 +704,447 @@ def _processar_apuracao_mt(ent_files, sai_files):
         raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
 
 
+
+def _processar_entradas_es(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_es", SCRIPTS_DIR / "analisar_entradas_es.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter),      "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),
+        }
+        nome_base  = f"Analise Entradas ICMS ES - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+def _processar_saidas_es(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_es", SCRIPTS_DIR / "analisar_saidas_es.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS ES - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+def _processar_apuracao_es(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_ES.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_es.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_es.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_ES_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_ES_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_ES.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_ES.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_ES_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_ES_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+def _processar_entradas_sc(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_sc", SCRIPTS_DIR / "analisar_entradas_sc.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter),      "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),
+        }
+        nome_base  = f"Analise Entradas ICMS SC - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+def _processar_saidas_sc(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_sc", SCRIPTS_DIR / "analisar_saidas_sc.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS SC - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+def _processar_apuracao_sc(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_SC.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_sc.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_sc.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_SC_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_SC_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_SC.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_SC.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_SC_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_SC_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+def _processar_entradas_pa(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_pa", SCRIPTS_DIR / "analisar_entradas_pa.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter),      "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),
+        }
+        nome_base  = f"Analise Entradas ICMS PA - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+def _processar_saidas_pa(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_pa", SCRIPTS_DIR / "analisar_saidas_pa.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS PA - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+def _processar_apuracao_pa(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_PA.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_pa.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_pa.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_PA_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_PA_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_PA.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_PA.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_PA_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_PA_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+def _processar_entradas_ba(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_ba", SCRIPTS_DIR / "analisar_entradas_ba.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter), "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),  "DIV6": ae.calcular_div6(df),
+        }
+        nome_base  = f"Analise Entradas ICMS BA - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+def _processar_saidas_ba(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_ba", SCRIPTS_DIR / "analisar_saidas_ba.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),     "DIV8": as_.calcular_div8(intra),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS BA - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+def _processar_apuracao_ba(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_BA.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_ba.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_ba.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_BA_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_BA_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_BA.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_BA.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_BA_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_BA_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+def _processar_entradas_df(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_df", SCRIPTS_DIR / "analisar_entradas_df.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter), "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),  "DIV6": ae.calcular_div6(df),
+        }
+        nome_base  = f"Analise Entradas ICMS DF - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+def _processar_saidas_df(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_df", SCRIPTS_DIR / "analisar_saidas_df.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),     "DIV8": as_.calcular_div8(intra),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS DF - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+def _processar_apuracao_df(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_DF.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_df.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_df.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_DF_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_DF_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_DF.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_DF.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_DF_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_DF_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
 def _processar_apuracao_to(ent_files, sai_files):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
@@ -745,13 +1186,14 @@ if _pagina == "📊 Análise Fiscal":
     _header("📊", f"Análise Fiscal — {_EMP_LABELS.get(_empresa, _empresa)}",
             _dados_emp["nome_completo"])
 
-    _uf_sel = st.radio(
+    _uf_sel = st.selectbox(
         "Estado (UF)",
-        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso"],
-        horizontal=True,
+        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso",
+                 "ES — Espírito Santo", "SC — Santa Catarina", "PA — Pará",
+                 "BA — Bahia", "DF — Distrito Federal"],
         key="uf_analise",
     )
-    _uf = "GO" if _uf_sel.startswith("GO") else ("TO" if _uf_sel.startswith("TO") else "MT")
+    _uf = _uf_sel[:2]
 
     tab_ent, tab_sai = st.tabs(["📥 Análise de Entradas", "📤 Análise de Saídas"])
 
@@ -781,8 +1223,13 @@ Analisa as notas fiscais de **entrada** e identifica divergências de ICMS:
         if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
             try:
                 with st.spinner("Processando arquivos de entradas..."):
-                    _fn_ent = (_processar_entradas_mt if _uf == "MT" else
-                               (_processar_entradas_to if _uf == "TO" else _processar_entradas))
+                    _FN_ENT = {
+                        'GO': _processar_entradas,    'TO': _processar_entradas_to,
+                        'MT': _processar_entradas_mt, 'ES': _processar_entradas_es,
+                        'SC': _processar_entradas_sc, 'PA': _processar_entradas_pa,
+                        'BA': _processar_entradas_ba, 'DF': _processar_entradas_df,
+                    }
+                    _fn_ent = _FN_ENT.get(_uf, _processar_entradas)
                     (excel_bytes, word_bytes, periodo, contagens,
                      total_registros, total_inter, nome_base) = _fn_ent(uploaded_ent)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
@@ -845,8 +1292,13 @@ Analisa as notas fiscais de **saída** e identifica divergências:
         if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
             try:
                 with st.spinner("Processando arquivos de saídas..."):
-                    _fn_sai = (_processar_saidas_mt if _uf == "MT" else
-                               (_processar_saidas_to if _uf == "TO" else _processar_saidas))
+                    _FN_SAI = {
+                        'GO': _processar_saidas,    'TO': _processar_saidas_to,
+                        'MT': _processar_saidas_mt, 'ES': _processar_saidas_es,
+                        'SC': _processar_saidas_sc, 'PA': _processar_saidas_pa,
+                        'BA': _processar_saidas_ba, 'DF': _processar_saidas_df,
+                    }
+                    _fn_sai = _FN_SAI.get(_uf, _processar_saidas)
                     (excel_bytes, word_bytes, periodo, contagens,
                      total_registros, nome_base) = _fn_sai(uploaded_sai)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
@@ -890,13 +1342,14 @@ elif _pagina == "🧮 Apuração Mensal":
     _header("🧮", f"Apuração Mensal de ICMS — {_EMP_LABELS.get(_empresa, _empresa)}",
             _dados_emp["nome_completo"])
 
-    _uf_sel = st.radio(
+    _uf_sel = st.selectbox(
         "Estado (UF)",
-        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso"],
-        horizontal=True,
+        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso",
+                 "ES — Espírito Santo", "SC — Santa Catarina", "PA — Pará",
+                 "BA — Bahia", "DF — Distrito Federal"],
         key="uf_apuracao",
     )
-    _uf = "GO" if _uf_sel.startswith("GO") else ("TO" if _uf_sel.startswith("TO") else "MT")
+    _uf = _uf_sel[:2]
 
     _desc_protege = "PROTEGE/GO e Saldo a Recolher" if _uf == "GO" else "Saldo a Recolher (sem PROTEGE)"
     st.markdown(f"""
@@ -935,8 +1388,13 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
     if pode_processar and st.button("▶️ Gerar Apuração", type="primary", key="btn_apuracao"):
         try:
             with st.spinner("Calculando apuração de ICMS..."):
-                _fn_apur = (_processar_apuracao_mt if _uf == "MT" else
-                            (_processar_apuracao_to if _uf == "TO" else _processar_apuracao))
+                _FN_APUR = {
+                    'GO': _processar_apuracao,    'TO': _processar_apuracao_to,
+                    'MT': _processar_apuracao_mt, 'ES': _processar_apuracao_es,
+                    'SC': _processar_apuracao_sc, 'PA': _processar_apuracao_pa,
+                    'BA': _processar_apuracao_ba, 'DF': _processar_apuracao_df,
+                }
+                _fn_apur = _FN_APUR.get(_uf, _processar_apuracao)
                 excel_bytes, nome_arquivo, stdout, stderr = _fn_apur(
                     uploaded_ent_apur or [], uploaded_sai_apur or [])
             st.success("✅ Apuração concluída!")
@@ -2294,170 +2752,4 @@ elif _pagina == "📅 Agenda do Líder":
                 dias = (ev["data"] - hoje).days
                 st.markdown(f"""
                 <div class="agenda-card">
-                    <h4>{_cores.get(ev['tipo'],'📌')} {ev['evento']}</h4>
-                    <p class="meta">
-                        <span class="tag tag-azul">{_tags.get(ev['tipo'],'')}</span>
-                        📅 {ev['data'].strftime('%d/%m/%Y')} &nbsp;·&nbsp;
-                        ⏳ {'Hoje!' if dias == 0 else (f'{dias} dias' if dias >= 0 else f'{abs(dias)} dias atrás')} &nbsp;·&nbsp;
-                        👤 {ev['responsavel']}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-    # ── ABA LIDERADOS ─────────────────────────────────────────────────────────
-    with tab_liderados:
-        _section("👥 Cadastro de Liderados")
-
-        if "liderados" not in st.session_state:
-            st.session_state["liderados"] = [
-                {"nome": "Liderado 1", "cargo": "Analista Fiscal",   "area": "ICMS",         "status": "✅ Em dia"},
-                {"nome": "Liderado 2", "cargo": "Analista Tributário","area": "PIS/COFINS",   "status": "⚠️ Pendência"},
-                {"nome": "Liderado 3", "cargo": "Assistente Fiscal",  "area": "SPED/Certidões","status": "✅ Em dia"},
-            ]
-
-        import pandas as _pd_lid
-        _df_lid = _pd_lid.DataFrame(st.session_state["liderados"])
-        st.dataframe(_df_lid, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        with st.expander("➕ Adicionar / editar liderado"):
-            with st.form("form_liderado"):
-                l1, l2, l3, l4 = st.columns(4)
-                _l_nome   = l1.text_input("Nome")
-                _l_cargo  = l2.text_input("Cargo")
-                _l_area   = l3.text_input("Área")
-                _l_status = l4.selectbox("Status", ["✅ Em dia","⚠️ Pendência","🔴 Atrasado","🔵 Em férias"])
-                if st.form_submit_button("Adicionar", type="primary"):
-                    st.session_state["liderados"].append({
-                        "nome": _l_nome, "cargo": _l_cargo,
-                        "area": _l_area, "status": _l_status,
-                    })
-                    st.rerun()
-
-    # ── ABA TAREFAS ───────────────────────────────────────────────────────────
-    with tab_tarefas:
-        _section("✅ Tarefas & Prazos por Liderado")
-
-        if "tarefas_agenda" not in st.session_state:
-            st.session_state["tarefas_agenda"] = [
-                # ── Concluídas ────────────────────────────────────────────────
-                {"tarefa": "Emitir CND Federal — DN Armazenamento (28.221.185/0001-83)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Emitir CND Federal — EDN Utilidades (20.758.851/0001-05)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Emitir CND Federal — R3 Suprimentos (10.641.901/0001-16)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Emitir CND Federal — Comercial Cristal (07.515.610/0001-77)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Emitir CND Federal — Atacadão do Lar (35.917.755/0001-30)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Organizar PDFs CNDs em pasta (5 arquivos nomeados por empresa/CNPJ)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Gerar planilha Apuração ICMS Junho/2026 — 3 abas (Apuração, Entradas, Saídas)",
-                 "responsavel": "Equipe Fiscal", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Implantar layout Alianzo (navy #1B3070 / blue #1B56A3) no Fiscal 360",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Adicionar módulo Certidões (Federal / Estadual / Municipal) ao app",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Adicionar módulo Guias ICMS (DARE-GO, DIFAL, Calendário) ao app",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Renomear plataforma para Fiscal 360 (remover referências ICMS/GO)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                {"tarefa": "Criar módulos Imersão Fiscal, Malha Fina, PIS/COFINS, Agenda do Líder",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 29), "status": "Concluído"},
-                # ── Pendentes imediatas ────────────────────────────────────────
-                {"tarefa": "Push GitHub — app.py Fiscal 360 (versão atual)",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 6, 30), "status": "Pendente"},
-                {"tarefa": "Emitir Certidões Estaduais SEFAZ-GO — 5 empresas",
-                 "responsavel": "Equipe Fiscal", "prazo": _dt.date(2026, 7, 3), "status": "Pendente"},
-                {"tarefa": "Emitir Certidões Municipais — Goiânia + filiais EDN",
-                 "responsavel": "Equipe Fiscal", "prazo": _dt.date(2026, 7, 3), "status": "Pendente"},
-                {"tarefa": "Transmissão SPED Fiscal EFD ICMS/IPI — lote via PVA (automação)",
-                 "responsavel": "Equipe SPED", "prazo": _dt.date(2026, 7, 5), "status": "Pendente"},
-                # ── Em andamento ──────────────────────────────────────────────
-                {"tarefa": "Análise divergências ICMS Entradas — Junho/2026",
-                 "responsavel": "Equipe Fiscal", "prazo": _dt.date(2026, 7, 7), "status": "Em andamento"},
-                {"tarefa": "Análise divergências ICMS Saídas — Junho/2026",
-                 "responsavel": "Equipe Fiscal", "prazo": _dt.date(2026, 7, 7), "status": "Em andamento"},
-                {"tarefa": "Diagnóstico Malha Fina Estadual — EDN / Atacadão / Cristal",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 7, 28), "status": "Em andamento"},
-                {"tarefa": "Apuração PIS/COFINS — desenvolvimento do módulo no Fiscal 360",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 8, 1), "status": "Em andamento"},
-                {"tarefa": "Imersão Fiscal — relatório diagnóstico completo multitributo",
-                 "responsavel": "Éliton", "prazo": _dt.date(2026, 8, 5), "status": "Em andamento"},
-            ]
-
-        _status_icon = {"Concluído": "✅", "Em andamento": "🔄", "Pendente": "⏳", "Bloqueado": "🔴"}
-        _status_cor  = {"Concluído": "verde", "Em andamento": "amarelo", "Pendente": "amarelo", "Bloqueado": "vermelho"}
-
-        for i, t in enumerate(st.session_state["tarefas_agenda"]):
-            dias = (t["prazo"] - hoje).days
-            _prazo_txt = "✅ Concluído" if t["status"] == "Concluído" else (
-                "🔴 Vencido!" if dias < 0 else ("⚠️ Hoje!" if dias == 0 else f"⏳ {dias} dias"))
-            st.markdown(f"""
-            <div class="agenda-card {_status_cor.get(t['status'],'verde')}">
-                <h4>{_status_icon.get(t['status'],'📌')} {t['tarefa']}</h4>
-                <p class="meta">
-                    👤 {t['responsavel']} &nbsp;·&nbsp;
-                    📅 {t['prazo'].strftime('%d/%m/%Y')} &nbsp;·&nbsp;
-                    {_prazo_txt}
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        with st.expander("➕ Nova tarefa"):
-            with st.form("form_tarefa"):
-                t1, t2 = st.columns(2)
-                _t_nome  = t1.text_input("Descrição da tarefa")
-                _t_resp  = t2.text_input("Responsável")
-                t3, t4 = st.columns(2)
-                _t_prazo = t3.date_input("Prazo", value=hoje + _dt.timedelta(days=7))
-                _t_stat  = t4.selectbox("Status", ["Pendente","Em andamento","Concluído","Bloqueado"])
-                if st.form_submit_button("Adicionar tarefa", type="primary"):
-                    st.session_state["tarefas_agenda"].append({
-                        "tarefa": _t_nome, "responsavel": _t_resp,
-                        "prazo": _t_prazo, "status": _t_stat,
-                    })
-                    st.rerun()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PÁGINA: XML x Movimentação
-elif _pagina == "\U0001f5c2️ XML x Movimentação":
-    _header("\U0001f5c2️", f"XML x Movimentação — {_EMP_LABELS.get(_empresa, _empresa)}",
-            "Cruzamento de NF-e XML com movimentação fiscal do ERP")
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        xml_files = st.file_uploader(
-            "XMLs de NF-e (.xml)",
-            type=["xml"],
-            accept_multiple_files=True,
-            help="Arquivos XML das notas fiscais eletrônicas",
-            key="xml_upload",
-        )
-    with col_b:
-        mov_xml_files = st.file_uploader(
-            "Movimentação ERP (XLS / XLSX / CSV)",
-            type=["xls", "xlsx", "csv"],
-            accept_multiple_files=True,
-            help="Mesmo formato usado na Análise Fiscal",
-            key="mov_xml_upload",
-        )
-
-    if xml_files or mov_xml_files:
-        c1, c2 = st.columns(2)
-        c1.metric("XMLs carregados", len(xml_files) if xml_files else 0)
-        c2.metric("Arquivos ERP carregados", len(mov_xml_files) if mov_xml_files else 0)
-
-    st.info("⏳ Funcionalidade de cruzamento em implementação. Em breve disponível.")
-
-
-# ── Footer ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="alz-footer">
-    Alianzo Fiscal 360 &nbsp;·&nbsp; Plataforma Tributária Multitributo &nbsp;·&nbsp;
-    Dados processados em memória — não armazenados no servidor &nbsp;·&nbsp; 2026
-</div>
-""", unsafe_allow_html=True)
+                    <h4>{_cor
