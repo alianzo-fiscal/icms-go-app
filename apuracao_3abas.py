@@ -306,6 +306,31 @@ def _base_estorno(sai):
     return df
 
 
+def _agg_ent(ent, mask):
+    """Agrupa entradas filtradas pelo mask no padrao KEYS_ENT."""
+    return ent[mask].groupby(KEYS_ENT, dropna=False).agg(
+        QTD=('_QTCONT','sum'), VL_ITEM=('_VLITEM','sum'),
+        VL_CONTABIL=('_VLCONT','sum'), BASE_ICMS=('_VLBASE','sum'),
+        ICMS=('_VLICMS','sum'), N_NOTAS=('_NUMNOTA','nunique')
+    ).reset_index().rename(columns={
+        '_FILIAL':'FILIAL','_PROD':'COD_PRODUTO','_DESC':'DESCRICAO',
+        '_NCM':'NCM','_CFOP':'CFOP','_CST':'CST','_ORIG':'ORIGEM','_PERCICMS':'ALIQ_PCT'
+    })
+
+
+def _base_difal_entrada(ent):
+    """Entradas interestaduais sujeitas a DIFAL (uso/consumo e ativo imobilizado)."""
+    mask = ent['_CFOP'].isin(CFOP_DIFAL_ENT) & ent['_CFOP'].str.startswith('2')
+    df = _agg_ent(ent, mask)
+    if df.empty:
+        return df
+    # Aliquota interestadual: 4% importado (ORIG==1), 12% nacional
+    df['ALIQ_INTER'] = df['ORIGEM'].apply(lambda o: ALIQ_INTER_IMP if str(o).strip() == '1' else ALIQ_INTER_NAC)
+    # DIFAL = max(0, BASE * 19% - ICMS_PAGO)
+    df['DIFAL_ENTRADA'] = ((df['BASE_ICMS'] * ALIQ_INT_GO / 100) - df['ICMS']).clip(lower=0).round(2)
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Geracao da Aba 1 - APURACAO ICMS
 # ---------------------------------------------------------------------------
@@ -465,7 +490,7 @@ COL_WIDTHS = {'FILIAL':10,'COD_PRODUTO':14,'DESCRICAO':40,'NCM':12,'CFOP':8,
               'CST':7,'ORIGEM':8,'ALIQ_PCT':10,'QTD':12,'VL_ITEM':16,
               'VL_CONTABIL':16,'BASE_ICMS':16,'ICMS':16,'N_NOTAS':10}
 
-NUM_COLS_EXTRA = {'DIFAL_SAIDA','INTERVALO','PROTEGE_15PCT','PROTEGE_2PCT',
+NUM_COLS_EXTRA = {'DIFAL_SAIDA','DIFAL_ENTRADA','INTERVALO','PROTEGE_15PCT','PROTEGE_2PCT',
                   'ICMS_COMPLEMENTAR','ICMS_ESTORNO'}
 
 def _header_row(ws, cols=None):
@@ -503,7 +528,7 @@ def _total_row(ws, df, cols=None):
     return cells
 
 def gerar_bases(output_path, periodo, base_ent, base_sai,
-                base_difal=None, base_p15=None, base_p2=None,
+                base_difal=None, base_difal_ent=None, base_p15=None, base_p2=None,
                 base_comp=None, base_estorno=None):
     wb = Workbook(write_only=True)
 
@@ -533,7 +558,8 @@ def gerar_bases(output_path, periodo, base_ent, base_sai,
         ws.append(_total_row(ws, df, cols))
         print('    ' + nome + ': ' + str(n) + ' linhas concluidas', flush=True)
 
-    COLS_DIFAL = COLS_BASE + ['DIFAL_SAIDA']
+    COLS_DIFAL     = COLS_BASE + ['DIFAL_SAIDA']
+    COLS_DIFAL_ENT = COLS_BASE + ['ALIQ_INTER', 'DIFAL_ENTRADA']
     COLS_P15   = COLS_BASE + ['INTERVALO', 'PROTEGE_15PCT']
     COLS_P2    = COLS_BASE + ['PROTEGE_2PCT']
     COLS_COMP  = COLS_BASE + ['ICMS_COMPLEMENTAR']
@@ -555,6 +581,11 @@ def gerar_bases(output_path, periodo, base_ent, base_sai,
         print('  Escrevendo BASE DIFAL (' + str(len(base_difal)) + ' linhas)...', flush=True)
         _escrever_aba('BASE DIFAL', 'BASE DIFAL SAIDA EC87/2015 - ' + periodo, base_difal, '7030A0', COLS_DIFAL)
         del base_difal; gc.collect()
+
+    if base_difal_ent is not None and len(base_difal_ent) > 0:
+        print('  Escrevendo BASE DIFAL ENTRADA (' + str(len(base_difal_ent)) + ' linhas)...', flush=True)
+        _escrever_aba('BASE DIFAL ENTRADA', 'BASE DIFAL ENTRADA (DIFAL Compra) - ' + periodo, base_difal_ent, '4472C4', COLS_DIFAL_ENT)
+        del base_difal_ent; gc.collect()
 
     if base_p15 is not None and len(base_p15) > 0:
         print('  Escrevendo BASE PROTEGE 15% (' + str(len(base_p15)) + ' linhas)...', flush=True)
@@ -645,6 +676,7 @@ def main():
     base_p15_df   = _base_protege15(sai)   if len(sai) > 0 else pd.DataFrame()
     base_p2_df    = _base_protege2(sai)    if len(sai) > 0 else pd.DataFrame()
     base_comp_df  = _base_icms_comp(sai)   if len(sai) > 0 else pd.DataFrame()
+    base_difal_ent_df = _base_difal_entrada(ent) if len(ent) > 0 else pd.DataFrame()
     base_est_df   = _base_estorno(sai)     if len(sai) > 0 else pd.DataFrame()
     print('  BASE SAIDAS: ' + str(len(base_sai_df)) + ' linhas', flush=True)
     print('  BASE ENTRADAS: ' + str(len(base_ent_df)) + ' linhas', flush=True)
@@ -653,6 +685,7 @@ def main():
     print('  BASE PROTEGE 2%: ' + str(len(base_p2_df)) + ' linhas', flush=True)
     print('  BASE ICMS COMP 5949: ' + str(len(base_comp_df)) + ' linhas', flush=True)
     print('  BASE ESTORNO 5927: ' + str(len(base_est_df)) + ' linhas', flush=True)
+    print('  BASE DIFAL ENTRADA: ' + str(len(base_difal_ent_df)) + ' linhas', flush=True)
 
     # Liberar DataFrames brutos
     del sai, ent
@@ -672,9 +705,10 @@ def main():
 
     print('\nGerando Abas de BASES...', flush=True)
     gerar_bases(tmp_base, periodo, base_ent_df, base_sai_df,
-                base_difal=base_difal_df, base_p15=base_p15_df,
-                base_p2=base_p2_df, base_comp=base_comp_df, base_estorno=base_est_df)
-    del base_sai_df, base_ent_df, base_difal_df, base_p15_df, base_p2_df, base_comp_df, base_est_df
+                base_difal=base_difal_df, base_difal_ent=base_difal_ent_df,
+                base_p15=base_p15_df, base_p2=base_p2_df,
+                base_comp=base_comp_df, base_estorno=base_est_df)
+    del base_sai_df, base_ent_df, base_difal_df, base_difal_ent_df, base_p15_df, base_p2_df, base_comp_df, base_est_df
     gc.collect()
 
     # Combinar os dois arquivos
