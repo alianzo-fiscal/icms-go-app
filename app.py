@@ -613,6 +613,40 @@ def _processar_saidas_to(uploaded_files):
                 contagens, len(df), nome_base)
 
 
+def _processar_apuracao_to(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_TO.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_to.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_to.py não encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_TO_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_TO_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_TO.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_TO.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_TO_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_TO_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PÁGINA: Análise Fiscal
 # ══════════════════════════════════════════════════════════════════════════════
@@ -763,9 +797,18 @@ elif _pagina == "🧮 Apuração Mensal":
     _header("🧮", f"Apuração Mensal de ICMS — {_EMP_LABELS.get(_empresa, _empresa)}",
             _dados_emp["nome_completo"])
 
-    st.markdown("""
+    _uf_sel = st.radio(
+        "Estado (UF)",
+        options=["GO — Goiás", "TO — Tocantins"],
+        horizontal=True,
+        key="uf_apuracao",
+    )
+    _uf = "GO" if _uf_sel.startswith("GO") else "TO"
+
+    _desc_protege = "PROTEGE/GO e Saldo a Recolher" if _uf == "GO" else "Saldo a Recolher (sem PROTEGE)"
+    st.markdown(f"""
 Gera a planilha de **apuração de ICMS** com 3 abas:
-- **APURAÇÃO ICMS** — Débito, Crédito, DIFAL, PROTEGE/GO e Saldo a Recolher por filial
+- **APURAÇÃO ICMS** — Débito, Crédito, DIFAL, {_desc_protege} por filial
 - **BASE ENTRADAS** — Consolidado por filial / produto / CFOP / CST / alíquota
 - **BASE SAÍDAS** — Consolidado por filial / produto / CFOP / CST / alíquota
 
@@ -799,7 +842,8 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
     if pode_processar and st.button("▶️ Gerar Apuração", type="primary", key="btn_apuracao"):
         try:
             with st.spinner("Calculando apuração de ICMS..."):
-                excel_bytes, nome_arquivo, stdout, stderr = _processar_apuracao(
+                _fn_apur = _processar_apuracao_to if _uf == "TO" else _processar_apuracao
+                excel_bytes, nome_arquivo, stdout, stderr = _fn_apur(
                     uploaded_ent_apur or [], uploaded_sai_apur or [])
             st.success("✅ Apuração concluída!")
             if stdout.strip():
