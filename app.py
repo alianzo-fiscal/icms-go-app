@@ -556,12 +556,77 @@ def _processar_apuracao(ent_files, sai_files):
         raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
 
 
+def _processar_entradas_to(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_to", SCRIPTS_DIR / "analisar_entradas_to.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter), "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),  "DIV6": ae.calcular_div6(df),
+        }
+        nome_base  = f"Analise Entradas ICMS TO - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+
+def _processar_saidas_to(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_to", SCRIPTS_DIR / "analisar_saidas_to.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),     "DIV8": as_.calcular_div8(intra),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS TO - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PÁGINA: Análise Fiscal
 # ══════════════════════════════════════════════════════════════════════════════
 if _pagina == "📊 Análise Fiscal":
     _header("📊", f"Análise Fiscal — {_EMP_LABELS.get(_empresa, _empresa)}",
             _dados_emp["nome_completo"])
+
+    _uf_sel = st.radio(
+        "Estado (UF)",
+        options=["GO — Goiás", "TO — Tocantins"],
+        horizontal=True,
+        key="uf_analise",
+    )
+    _uf = "GO" if _uf_sel.startswith("GO") else "TO"
 
     tab_ent, tab_sai = st.tabs(["📥 Análise de Entradas", "📤 Análise de Saídas"])
 
@@ -591,8 +656,9 @@ Analisa as notas fiscais de **entrada** e identifica divergências de ICMS:
         if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
             try:
                 with st.spinner("Processando arquivos de entradas..."):
+                    _fn_ent = _processar_entradas_to if _uf == "TO" else _processar_entradas
                     (excel_bytes, word_bytes, periodo, contagens,
-                     total_registros, total_inter, nome_base) = _processar_entradas(uploaded_ent)
+                     total_registros, total_inter, nome_base) = _fn_ent(uploaded_ent)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
                 total_divs = sum(contagens.values())
                 col1, col2, col3, col4 = st.columns(4)
@@ -653,8 +719,9 @@ Analisa as notas fiscais de **saída** e identifica divergências:
         if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
             try:
                 with st.spinner("Processando arquivos de saídas..."):
+                    _fn_sai = _processar_saidas_to if _uf == "TO" else _processar_saidas
                     (excel_bytes, word_bytes, periodo, contagens,
-                     total_registros, nome_base) = _processar_saidas(uploaded_sai)
+                     total_registros, nome_base) = _fn_sai(uploaded_sai)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
                 total_divs = sum(contagens.values())
                 col1, col2, col3 = st.columns(3)
