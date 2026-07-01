@@ -613,6 +613,97 @@ def _processar_saidas_to(uploaded_files):
                 contagens, len(df), nome_base)
 
 
+def _processar_entradas_mt(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_entradas_mt", SCRIPTS_DIR / "analisar_entradas_mt.py")
+        ae = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ae)
+        df = ae.carregar_dados(caminhos)
+        periodo = ae.extrair_periodo(df, caminhos)
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": ae.calcular_div1(df, inter), "DIV2": ae.calcular_div2(inter),
+            "DIV3": ae.calcular_div3(inter),      "DIV4": ae.calcular_div4(inter),
+            "DIV5": ae.calcular_div5(inter),
+        }
+        nome_base  = f"Analise Entradas ICMS MT - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        ae.gerar_excel(df, divs, periodo, excel_path)
+        ae.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), len(inter), nome_base)
+
+
+def _processar_saidas_mt(uploaded_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        caminhos = [str(_salvar_arquivo(f, tmpdir)) for f in uploaded_files]
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("analisar_saidas_mt", SCRIPTS_DIR / "analisar_saidas_mt.py")
+        as_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(as_)
+        df = as_.carregar_dados(caminhos)
+        periodo = as_.extrair_periodo(df, caminhos)
+        intra = df[df["TIPO_OP"] == "Intraestadual"]
+        inter = df[df["TIPO_OP"] == "Interestadual"]
+        divs = {
+            "DIV1": as_.calcular_div1(df),    "DIV2": as_.calcular_div2(intra),
+            "DIV3": as_.calcular_div3(intra),  "DIV4": as_.calcular_div4(intra),
+            "DIV5": as_.calcular_div5(df),     "DIV6": as_.calcular_div6(inter),
+            "DIV7": as_.calcular_div7(df),
+        }
+        grp = as_.calcular_base_consolidada(df)
+        nome_base  = f"Analise Saidas ICMS MT - {periodo}"
+        excel_path = tmpdir / f"{nome_base}.xlsx"
+        word_path  = tmpdir / f"{nome_base}.docx"
+        as_.gerar_excel(df, divs, grp, periodo, excel_path)
+        as_.gerar_word(df, divs, periodo, word_path)
+        contagens = {k: len(v) if v is not None else 0 for k, v in divs.items()}
+        return (excel_path.read_bytes(), word_path.read_bytes(), periodo,
+                contagens, len(df), nome_base)
+
+
+def _processar_apuracao_mt(ent_files, sai_files):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        ent_paths = [str(_salvar_arquivo(f, tmpdir)) for f in ent_files]
+        sai_paths = [str(_salvar_arquivo(f, tmpdir)) for f in sai_files]
+        output_path     = tmpdir / "Apuracao_ICMS_MT.xlsx"
+        script_apur     = SCRIPTS_DIR / "apuracao_3abas_mt.py"
+        script_combinar = SCRIPTS_DIR / "combinar_xlsx.py"
+        if not script_apur.exists():
+            raise FileNotFoundError(f"apuracao_3abas_mt.py nao encontrado em {SCRIPTS_DIR}.")
+        tmp_apur = tmpdir / "Apuracao_ICMS_MT_tmp_apur.xlsx"
+        tmp_base = tmpdir / "Apuracao_ICMS_MT_tmp_base.xlsx"
+        cmd = ([sys.executable, str(script_apur)]
+               + ["--entradas"] + ent_paths
+               + ["--saidas"]   + sai_paths
+               + ["--output",   str(output_path)])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=str(tmpdir))
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if output_path.exists():
+            return output_path.read_bytes(), "Apuracao_ICMS_MT.xlsx", stdout, stderr
+        elif tmp_apur.exists() and tmp_base.exists() and script_combinar.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("combinar_xlsx", script_combinar)
+            cx = _ilu.module_from_spec(spec); spec.loader.exec_module(cx)
+            cx.combinar(str(tmp_apur), str(tmp_base), str(output_path))
+            if output_path.exists():
+                return output_path.read_bytes(), "Apuracao_ICMS_MT.xlsx", stdout + "\nAbas combinadas.", stderr
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_MT_apuracao.xlsx", stdout, stderr
+        elif tmp_apur.exists():
+            return tmp_apur.read_bytes(), "Apuracao_ICMS_MT_apuracao.xlsx", stdout, stderr
+        raise RuntimeError(f"Nenhum arquivo gerado.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+
 def _processar_apuracao_to(ent_files, sai_files):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
@@ -656,11 +747,11 @@ if _pagina == "📊 Análise Fiscal":
 
     _uf_sel = st.radio(
         "Estado (UF)",
-        options=["GO — Goiás", "TO — Tocantins"],
+        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso"],
         horizontal=True,
         key="uf_analise",
     )
-    _uf = "GO" if _uf_sel.startswith("GO") else "TO"
+    _uf = "GO" if _uf_sel.startswith("GO") else ("TO" if _uf_sel.startswith("TO") else "MT")
 
     tab_ent, tab_sai = st.tabs(["📥 Análise de Entradas", "📤 Análise de Saídas"])
 
@@ -690,7 +781,8 @@ Analisa as notas fiscais de **entrada** e identifica divergências de ICMS:
         if uploaded_ent and st.button("▶️ Processar Entradas", type="primary", key="btn_entradas"):
             try:
                 with st.spinner("Processando arquivos de entradas..."):
-                    _fn_ent = _processar_entradas_to if _uf == "TO" else _processar_entradas
+                    _fn_ent = (_processar_entradas_mt if _uf == "MT" else
+                               (_processar_entradas_to if _uf == "TO" else _processar_entradas))
                     (excel_bytes, word_bytes, periodo, contagens,
                      total_registros, total_inter, nome_base) = _fn_ent(uploaded_ent)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
@@ -753,7 +845,8 @@ Analisa as notas fiscais de **saída** e identifica divergências:
         if uploaded_sai and st.button("▶️ Processar Saídas", type="primary", key="btn_saidas"):
             try:
                 with st.spinner("Processando arquivos de saídas..."):
-                    _fn_sai = _processar_saidas_to if _uf == "TO" else _processar_saidas
+                    _fn_sai = (_processar_saidas_mt if _uf == "MT" else
+                               (_processar_saidas_to if _uf == "TO" else _processar_saidas))
                     (excel_bytes, word_bytes, periodo, contagens,
                      total_registros, nome_base) = _fn_sai(uploaded_sai)
                 st.success(f"✅ Análise concluída — Período: **{periodo}**")
@@ -799,11 +892,11 @@ elif _pagina == "🧮 Apuração Mensal":
 
     _uf_sel = st.radio(
         "Estado (UF)",
-        options=["GO — Goiás", "TO — Tocantins"],
+        options=["GO — Goiás", "TO — Tocantins", "MT — Mato Grosso"],
         horizontal=True,
         key="uf_apuracao",
     )
-    _uf = "GO" if _uf_sel.startswith("GO") else "TO"
+    _uf = "GO" if _uf_sel.startswith("GO") else ("TO" if _uf_sel.startswith("TO") else "MT")
 
     _desc_protege = "PROTEGE/GO e Saldo a Recolher" if _uf == "GO" else "Saldo a Recolher (sem PROTEGE)"
     st.markdown(f"""
@@ -842,7 +935,8 @@ Gera a planilha de **apuração de ICMS** com 3 abas:
     if pode_processar and st.button("▶️ Gerar Apuração", type="primary", key="btn_apuracao"):
         try:
             with st.spinner("Calculando apuração de ICMS..."):
-                _fn_apur = _processar_apuracao_to if _uf == "TO" else _processar_apuracao
+                _fn_apur = (_processar_apuracao_mt if _uf == "MT" else
+                            (_processar_apuracao_to if _uf == "TO" else _processar_apuracao))
                 excel_bytes, nome_arquivo, stdout, stderr = _fn_apur(
                     uploaded_ent_apur or [], uploaded_sai_apur or [])
             st.success("✅ Apuração concluída!")
